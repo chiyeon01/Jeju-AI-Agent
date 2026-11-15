@@ -1,0 +1,152 @@
+# ─────────────────────────────────────────────
+# 코스 플래너 Agent
+#
+# 기획서(5.3) 공식을 그대로 구현합니다.
+#   장소점수 = w1·성향적합도 + w2·데이터인기도(D1,D3) + w3·평가점수(자체)
+#            − w4·혼잡도(D2) − w5·이동시간(D6) + w6·날씨적합도(D7)
+# - 성향적합도: 성향 코드(공간 N/C, 취향 F/P)와 장소 종류(kind)의 일치 여부
+# - 데이터인기도: PLACES.reasons 의 데이터 코드 수(D1~D8이 많이 뒷받침할수록 인기) — 실데이터
+#   연동 시 D1(카드)·D3(와이파이/내비) 실제 지표값으로 교체
+# - 평가점수: 장소 평점(rating, 자체 앱 평가가 쌓이기 전에는 초기 평점으로 콜드스타트)
+# - 혼잡도: 지금은 D2(유동인구) 미연동이라 0으로 둠 (실데이터 연동 지점, TODO)
+# - 이동시간: 직전 정류지에서의 실제 이동 분(geo.travel_minutes)
+# - 날씨적합도: 비 오는 날 실내 장소 가중치
+#
+# 순서 구성(그리디)은 "카페 → 명소/노을 → 식사"처럼 시간대 성격이 있는 카테고리를
+# 순서대로 하나씩 채우고, 비 오는 날은 실내 카테고리로 자동 전환합니다(기획서 4.1-(2)).
+# 이동 순서 자체는 카테고리 순서 + 카테고리 내 최적 장소 선택으로 구성해 간단한 그리디
+# TSP 역할을 합니다 (기획서가 말하는 "그리디 + 2-opt"의 그리디 단계; 2-opt 교환은 TODO).
+# ─────────────────────────────────────────────
+from __future__ import annotations
+
+from app.data.tourist_data import KIND_LABEL, PLACES, WEATHER
+from app.schemas import CourseOut, CourseRequest, CourseStopOut, OriginIn, ProfileOut
+from app.services.geo import haversine_km, travel_minutes
+
+W1_AFFINITY = 18.0
+W2_POPULARITY = 6.0
+W3_RATING = 14.0
+W5_TRAVEL_PENALTY = 0.6
+W6_WEATHER = 20.0
+
+
+def _affinity_score(profile: ProfileOut, place: dict) -> float:
+    """성향 코드(공간 N/C, 취향 F/P)와 장소 종류의 일치도."""
+    code = profile.code or ""
+    score = 0.0
+    space = code[1] if len(code) > 1 else ""
+    taste = code[2] if len(code) > 2 else ""
+    outdoor_kinds = {"spot", "sunset"}
+    indoor_social_kinds = {"cafe", "food", "indoor"}
+    if space == "N" and place["kind"] in outdoor_kinds:
+        score += 1.0
+    if space == "C" and place["kind"] in indoor_social_kinds:
+        score += 0.6
+    if taste == "F" and place["kind"] == "food":
+        score += 1.0
+    if taste == "P" and place["kind"] in {"spot", "sunset"}:
+        score += 1.0
+    return score
+
+
+def _popularity_score(place: dict) -> float:
+    """reasons에 D1~D8 데이터 근거가 많을수록 "데이터로 뒷받침되는 인기"로 간주."""
+    return sum(1 for src, _ in place["reasons"] if src.startswith("D"))
+
+
+def _place_score(profile: ProfileOut, place: dict, rain: bool) -> float:
+    affinity = _affinity_score(profile, place)
+    popularity = _popularity_score(place)
+    rating = place["rating"]
+    weather_fit = 1.0 if (rain and place["indoor"]) or (not rain and not place["indoor"]) else -0.5
+    congestion = 0.0  # TODO: D2(유동인구) 실시간 혼잡도 연동 시 반영
+    return (
+        W1_AFFINITY * affinity
+        + W2_POPULARITY * popularity
+        + W3_RATING * rating
+        - congestion
+        + W6_WEATHER * weather_fit
+    )
+
+
+def _category_order(rain: bool) -> list[list[str]]:
+    if rain:
+        return [["cafe"], ["indoor"], ["indoor", "cafe"], ["food"]]
+    return [["cafe"], ["spot"], ["sunset"], ["food"]]
+
+
+def _pick_best(
+    candidates: list[dict],
+    kinds: list[str],
+    used: set[str],
+    profile: ProfileOut,
+    rain: bool,
+    last_point: tuple[float, float],
+    predicate=None,
+) -> dict | None:
+    pool = [p for p in candidates if p["kind"] in kinds and p["id"] not in used]
+    if predicate:
+        filtered = [p for p in pool if predicate(p)]
+        if filtered:
+            pool = filtered
+    if not pool:
+        return None
+
+    def key(p: dict) -> float:
+        dist = haversine_km(last_point[0], last_point[1], p["lat"], p["lon"])
+        return _place_score(profile, p, rain) - dist * 1.5  # 가까운 곳을 약간 우대
+
+    return max(pool, key=key)
+
+
+def plan_course(req: CourseRequest) -> CourseOut:
+    rain = req.weather == "rain"
+    origin = req.origin
+    used: set[str] = set()
+    stops: list[dict] = []
+    last_point = (origin.lat, origin.lon)
+
+    for kinds in _category_order(rain):
+        predicate = None
+        if "food" in kinds and req.seafood:
+            predicate = lambda p: p.get("seafood")
+        elif rain:
+            predicate = lambda p: p["indoor"]
+
+        place = _pick_best(PLACES, kinds, used, req.profile, rain, last_point, predicate)
+        if not place:
+            place = _pick_best(PLACES, kinds, used, req.profile, rain, last_point, None)
+        if place:
+            used.add(place["id"])
+            stops.append(place)
+            last_point = (place["lat"], place["lon"])
+
+    keep = max(2, len(stops) - max(0, req.removeCount))
+    trimmed = stops[:keep]
+
+    h, m = (int(x) for x in req.startTime.split(":"))
+    t = h * 60 + m
+    out_stops: list[CourseStopOut] = []
+    prev: dict | None = None
+    for place in trimmed:
+        if prev is None:
+            move = 0
+        else:
+            km = haversine_km(prev["lat"], prev["lon"], place["lat"], place["lon"])
+            move = travel_minutes(km)
+        t += move
+        at = f"{(t // 60) % 24:02d}:{t % 60:02d}"
+        t += place["stay"]
+        out_stops.append(
+            CourseStopOut(
+                **{k: v for k, v in place.items()},
+                at=at,
+                move=move,
+            )
+        )
+        prev = place
+
+    return CourseOut(weather=req.weather, stops=out_stops)
+
+
+__all__ = ["plan_course", "KIND_LABEL", "WEATHER"]
