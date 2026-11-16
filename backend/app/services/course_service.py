@@ -20,8 +20,9 @@
 # ─────────────────────────────────────────────
 from __future__ import annotations
 
-from app.data.tourist_data import KIND_LABEL, PLACES, WEATHER
-from app.schemas import CourseOut, CourseRequest, CourseStopOut, OriginIn, ProfileOut
+from app.data.tourist_data import KIND_LABEL, PLACES, REGIONS_BY_ID, WEATHER
+from app.errors import ApiError
+from app.schemas import CourseOut, CourseRequest, CourseStopOut, ProfileOut, WeatherOut
 from app.services.datahub_service import region_crowd
 from app.services.geo import haversine_km, travel_minutes
 
@@ -127,16 +128,19 @@ def _pick_best(
 
 
 def plan_course(req: CourseRequest) -> CourseOut:
+    origin = REGIONS_BY_ID.get(req.regionId)
+    if origin is None:
+        raise ApiError(404, "REGION_NOT_FOUND", f"알 수 없는 지역이에요: {req.regionId}")
     rain = req.weather == "rain"
-    origin = req.origin
+    seafood = req.options.seafood
     crowd = region_crowd()  # 캐시만 읽음 (없으면 None → 혼잡도 0)
     used: set[str] = set()
     stops: list[dict] = []
-    last_point = (origin.lat, origin.lon)
+    last_point = (origin["lat"], origin["lon"])
 
     for kinds in _category_order(rain):
         predicate = None
-        if "food" in kinds and req.seafood:
+        if "food" in kinds and seafood:
             predicate = lambda p: p.get("seafood")
         elif rain:
             predicate = lambda p: p["indoor"]
@@ -149,11 +153,14 @@ def plan_course(req: CourseRequest) -> CourseOut:
             stops.append(place)
             last_point = (place["lat"], place["lon"])
 
-    keep = max(2, len(stops) - max(0, req.removeCount))
+    keep = max(2, len(stops) - req.options.removeCount)
     trimmed = stops[:keep]
 
     h, m = (int(x) for x in req.startTime.split(":"))
-    t = h * 60 + m
+    start = h * 60 + m
+    hours = req.hours or req.profile.hours
+    end_limit = start + hours * 60 if hours else None
+    t = start
     out_stops: list[CourseStopOut] = []
     prev: dict | None = None
     for place in trimmed:
@@ -162,6 +169,9 @@ def plan_course(req: CourseRequest) -> CourseOut:
         else:
             km = haversine_km(prev["lat"], prev["lon"], place["lat"], place["lon"])
             move = travel_minutes(km)
+        # 이용 시간(hours)을 넘기는 장소는 뺍니다 (최소 2곳은 유지)
+        if end_limit is not None and len(out_stops) >= 2 and t + move + place["stay"] > end_limit:
+            break
         t += move
         at = f"{(t // 60) % 24:02d}:{t % 60:02d}"
         t += place["stay"]
@@ -174,7 +184,7 @@ def plan_course(req: CourseRequest) -> CourseOut:
         )
         prev = place
 
-    return CourseOut(weather=req.weather, stops=out_stops)
+    return CourseOut(weather=WeatherOut(code=req.weather, **WEATHER[req.weather]), stops=out_stops)
 
 
 __all__ = ["plan_course", "KIND_LABEL", "WEATHER"]

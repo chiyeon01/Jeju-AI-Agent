@@ -1,10 +1,13 @@
 # ─────────────────────────────────────────────
 # 제주잇다 백엔드 (FastAPI)
 # 실행: uvicorn app.main:app --reload --port 8000  (backend/ 폴더에서)
-# 프론트는 vite가 /api → http://localhost:8000 으로 프록시합니다.
+#  - REST API : /api/v1/...   (React 는 vite 프록시로 /api → :8000, Flutter 는 직접 호출)
+#  - WebSocket: /ws/events?token=<관리자 액세스 토큰>  (관리 콘솔 실시간 이벤트)
+#  - 오류 형식: { "error": { "code", "message" } }
 # ─────────────────────────────────────────────
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 import time
@@ -12,10 +15,13 @@ import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import events
 from app.config import get_settings
 from app.db import init_db
-from app.routers import datahub, owner, tourist
+from app.errors import install_error_handlers
+from app.routers import admin, auth, datahub, owner, tourist
 from app.routers import map as map_router
+from app.security import seed_demo_accounts
 from app.services.datahub_client import DataHubError
 from app.services.datahub_service import region_crowd
 
@@ -23,11 +29,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("jejuitda")
 
 settings = get_settings()
+API_PREFIX = "/api/v1"
 
 app = FastAPI(
     title="제주잇다 API",
     description="관광객의 취향과 제주 상권을 데이터로 잇는 AI Agent 서비스 백엔드",
-    version="0.1.0",
+    version="1.0.0",
 )
 
 app.add_middleware(
@@ -37,11 +44,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+install_error_handlers(app)
 
-app.include_router(tourist.router, prefix="/api")
-app.include_router(owner.router, prefix="/api")
-app.include_router(map_router.router, prefix="/api")
-app.include_router(datahub.router, prefix="/api")
+for r in (auth.router, tourist.regions_router, tourist.router, owner.router, admin.router,
+          map_router.router, datahub.router):
+    app.include_router(r, prefix=API_PREFIX)
+app.include_router(events.ws_router)
 
 
 def _warm_region_crowd(attempts: int = 5, wait_seconds: int = 60) -> None:
@@ -60,8 +68,11 @@ def _warm_region_crowd(attempts: int = 5, wait_seconds: int = 60) -> None:
 
 
 @app.on_event("startup")
-def on_startup() -> None:
+async def on_startup() -> None:
     init_db()
+    events.bind_loop(asyncio.get_running_loop())
+    if settings.seed_demo_accounts:
+        seed_demo_accounts()
     if settings.jeju_data_hub_api_key.strip():
         threading.Thread(target=_warm_region_crowd, name="datahub-warmup", daemon=True).start()
     else:
@@ -69,17 +80,15 @@ def on_startup() -> None:
     if settings.has_openai_key:
         logger.info("GPT(OpenAI) 연동 활성화 (model=%s)", settings.openai_model)
     else:
-        logger.warning(
-            "OPENAI_API_KEY가 없어 GPT 없이 규칙 기반 응답으로 동작합니다. "
-            "backend/.env 에 키를 넣으면 자동으로 켜집니다."
-        )
+        logger.warning("OPENAI_API_KEY가 없어 GPT 없이 규칙 기반 응답으로 동작합니다.")
 
 
-@app.get("/api/health")
+@app.get(f"{API_PREFIX}/health")
 def health() -> dict:
     return {
         "ok": True,
         "gpt_enabled": settings.has_openai_key,
         "jeju_data_hub_connected": bool(settings.jeju_data_hub_api_key.strip()),
         "kakao_map_enabled": settings.has_kakao_key,
+        "region_crowd_date": (region_crowd() or {}).get("date"),
     }

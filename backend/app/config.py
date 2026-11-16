@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     database_path: str = "./storage/jejuitda.db"
     llm_fallback_on_error: bool = True
+    # 제주데이터허브에서 받아 둔 파일 데이터 폴더 (관리 콘솔 적재 이력에 표시)
+    data_dir: str = "../data"
+
+    # 로그인 (JWT). 비워두면 storage/.jwt_secret 에 무작위 값을 만들어 씁니다.
+    jwt_secret: str = ""
+    access_token_minutes: int = 30
+    refresh_token_days: int = 14
+    # 시연 계정(user/owner/admin@jeju.kr, 비밀번호 jeju1234)을 처음 실행 때 만듭니다.
+    seed_demo_accounts: bool = True
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -52,6 +61,15 @@ class Settings(BaseSettings):
         if not p.is_absolute():
             p = BACKEND_DIR / p
         return p
+
+    @property
+    def data_path(self) -> Path:
+        p = Path(self.data_dir)
+        return (p if p.is_absolute() else BACKEND_DIR / p).resolve()
+
+    @property
+    def storage_dir(self) -> Path:
+        return self.database_file.parent
 
 
 @lru_cache

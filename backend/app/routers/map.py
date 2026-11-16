@@ -7,7 +7,7 @@
 # ─────────────────────────────────────────────
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.schemas import (
     GeocodeOut,
@@ -19,9 +19,10 @@ from app.schemas import (
     ReverseGeocodeOut,
     ReverseGeocodeRequest,
 )
+from app.security import current_user
 from app.services import map_service
 
-router = APIRouter(prefix="/map", tags=["map"])
+router = APIRouter(prefix="/map", tags=["map"], dependencies=[Depends(current_user)])
 
 
 @router.get("/regions", response_model=list[RegionOut])

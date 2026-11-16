@@ -42,6 +42,12 @@ def parse_date(s: str | None) -> date | None:
 
 
 # ── 최신 데이터 날짜 찾기 ─────────────────────
+def known_latest_date(dataset: str) -> date | None:
+    """이미 찾아 둔 최신 날짜(없으면 None). 관리 콘솔이 허브를 부르지 않고 보여줄 때 씀."""
+    hit = _latest_cache.get(dataset)
+    return hit[1] if hit else None
+
+
 def latest_date(dataset: str, max_back_days: int = 4000) -> date | None:
     """오늘부터 거꾸로 데이터가 있는 가장 최근 날짜를 찾습니다 (지수 탐색 + 이분 탐색, 약 10~15회 호출).
     결과는 12시간 동안 메모리에 둡니다."""
@@ -185,6 +191,7 @@ def region_crowd(refresh: bool = False) -> dict | None:
             r["regionId"]: {
                 "index": round((r["visitPopPerEmd"] - lo) / (hi - lo), 3) if hi > lo else 0.0,
                 "visitPopPerEmd": r["visitPopPerEmd"],
+                "visitPop": r["visitPop"],
                 "vsAveragePct": round((r["visitPopPerEmd"] / avg - 1) * 100),
             }
             for r in regions

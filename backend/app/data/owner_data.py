@@ -2,7 +2,7 @@
 # 상권 주인 Agent용 매장·지표 데이터
 #
 # frontend/src/mock/owner.js 의 시연용 가상 매장을 그대로 옮긴 "기본 매장"입니다.
-# 평가(리뷰)가 들어오면 review_service 가 INDICATORS["csat"]와 STORE["score"]를
+# 평가(리뷰)가 들어오면 review_service 가 INDICATORS 의 csat 항목과 STORE["score"]를
 # 실시간으로 다시 계산합니다. 실데이터 연동 시 STORE/INDICATORS 조회 부분을
 # DB 쿼리로 바꾸면 됩니다 (상권 분석 Agent의 "지표 계산 SQL 실행"에 해당).
 # ─────────────────────────────────────────────
@@ -23,29 +23,19 @@ STORE = {
 
 SCORE_TREND = [61, 63, 62, 64, 66, 65, 67, 66, 68, 69, 68, 72]
 
-INDICATORS = {
-    "sales": {"key": "sales", "name": "매출 추세 지수", "value": 108, "unit": "점", "delta": 6, "good": True, "src": "D1",
+INDICATORS = [
+    {"key": "sales", "name": "매출 추세 지수", "value": 108, "unit": "점", "delta": 6, "good": True, "src": "D1",
                "desc": "애월읍 한식 업종 카드 소비, 전년 동기 대비", "basis": "2025-06", "spark": [96, 98, 97, 101, 103, 102, 108]},
-    "conv": {"key": "conv", "name": "유동 전환율", "value": 3.1, "unit": "%", "delta": -0.4, "good": False, "src": "D1·D2",
+    {"key": "conv", "name": "유동 전환율", "value": 3.1, "unit": "%", "delta": -0.4, "good": False, "src": "D1·D2",
              "desc": "읍면동 유동인구 대비 업종 카드 이용 건수", "basis": "2025-06 / 매일", "spark": [3.6, 3.5, 3.5, 3.4, 3.3, 3.5, 3.1]},
-    "tourist": {"key": "tourist", "name": "관광객 유입도", "value": 74, "unit": "점", "delta": 9, "good": True, "src": "D2·D3·D8",
+    {"key": "tourist", "name": "관광객 유입도", "value": 74, "unit": "점", "delta": 9, "good": True, "src": "D2·D3·D8",
                 "desc": "외국인 유동 비중, 주변 와이파이 방문자, 검색 추세", "basis": "매일", "spark": [58, 60, 63, 65, 64, 70, 74]},
-    "comp": {"key": "comp", "name": "경쟁 밀도", "value": 12, "unit": "곳", "delta": 2, "good": False, "src": "D5",
+    {"key": "comp", "name": "경쟁 밀도", "value": 12, "unit": "곳", "delta": 2, "good": False, "src": "D5",
              "desc": "반경 300m 동일 업종 점포 수 (최근 3개월 개업 2)", "basis": "2025-09", "spark": [9, 9, 10, 10, 10, 11, 12]},
-    "access": {"key": "access", "name": "접근성 점수", "value": 81, "unit": "점", "delta": 0, "good": True, "src": "D6·D4",
+    {"key": "access", "name": "접근성 점수", "value": 81, "unit": "점", "delta": 0, "good": True, "src": "D6·D4",
                "desc": "버스 정류장 180m, 한담 산책로까지 6분", "basis": "2025-10", "spark": [81, 81, 81, 81, 81, 81, 81]},
-    "csat": {"key": "csat", "name": "고객 만족 지수", "value": 4.3, "unit": "/5", "delta": 0.2, "good": True, "src": "자체",
+    {"key": "csat", "name": "고객 만족 지수", "value": 4.3, "unit": "/5", "delta": 0.2, "good": True, "src": "자체",
              "desc": "앱 평가 평균 (최근 30일, 리뷰 128건)", "basis": "실시간", "spark": [4.0, 4.1, 4.1, 4.0, 4.2, 4.1, 4.3]},
-    "fit": {"key": "fit", "name": "성향 적합도", "value": "노을 감성 탐험가", "unit": "", "delta": None, "good": True, "src": "자체",
-            "desc": "이 매장을 높게 평가한 관광객 성향 1위 (31%)", "basis": "실시간", "spark": None},
-}
-
-FIT_DIST = [
-    {"name": "노을 감성 탐험가", "pct": 31},
-    {"name": "해녀밥상 여행자", "pct": 22},
-    {"name": "골목 사진 산책가", "pct": 17},
-    {"name": "핫플 미식 모험가", "pct": 12},
-    {"name": "기타 12개 유형", "pct": 18},
 ]
 
 WEEKLY_REPORT = {

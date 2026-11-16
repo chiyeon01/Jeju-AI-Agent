@@ -15,7 +15,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from openai import APIError, APITimeoutError, OpenAI
+from openai import APIError, APITimeoutError, BadRequestError, OpenAI
 
 from app.config import get_settings
 
@@ -39,6 +39,7 @@ class LLMService:
             if settings.has_openai_key
             else None
         )
+        self._supports_temperature = True  # 거절당하면 False 로 바꿔 이후엔 보내지 않음
 
     @property
     def is_enabled(self) -> bool:
@@ -58,15 +59,25 @@ class LLMService:
         try:
             kwargs: dict[str, Any] = {
                 "model": self._settings.openai_model,
-                "temperature": temperature,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
             }
+            if self._supports_temperature:
+                kwargs["temperature"] = temperature
             if json_mode:
                 kwargs["response_format"] = {"type": "json_object"}
-            resp = self._client.chat.completions.create(**kwargs)
+            try:
+                resp = self._client.chat.completions.create(**kwargs)
+            except BadRequestError as e:
+                # 최신 모델(gpt-5 이후 등)은 temperature 기본값(1)만 받음 → 빼고 한 번 더, 이후로는 안 보냄
+                if "temperature" not in kwargs or "temperature" not in str(e):
+                    raise
+                self._supports_temperature = False
+                logger.info("모델 %s 은 temperature 를 지원하지 않아 기본값으로 호출합니다", kwargs["model"])
+                kwargs.pop("temperature")
+                resp = self._client.chat.completions.create(**kwargs)
             content = (resp.choices[0].message.content or "").strip()
             if json_mode:
                 try:

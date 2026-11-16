@@ -58,6 +58,7 @@ class DataHubClient:
         self._cache_dir = settings.database_file.parent / "datahub_cache"
         self._lock = threading.Lock()
         self._calls: dict[tuple[str, str], int] = {}  # (dataset, YYYYMMDD) → 호출 수
+        self.last_error: dict[str, tuple[str, str]] = {}  # dataset → (시각, 오류) — 성공하면 지움
         self._load_quota()
 
     @property
@@ -159,15 +160,31 @@ class DataHubClient:
             else:
                 if resp.status_code == 200:
                     try:
-                        return resp.json()
+                        body = resp.json()
                     except ValueError:
                         last = "JSON이 아닌 응답"
+                    else:
+                        self.last_error.pop(dataset, None)
+                        return body
                 elif resp.status_code == 403:
                     raise DataHubError("데이터허브가 키를 거부했어요. 프로젝트 키와 '프로젝트 담기' 여부를 확인하세요", status=502)
                 else:
                     last = f"HTTP {resp.status_code}"
             time.sleep(1.0 * (attempt + 1))
+        self.last_error[dataset] = (datetime.now().strftime("%m-%d %H:%M"), last)
         raise DataHubError(f"'{spec['title']}' 호출이 {MAX_RETRIES}번 모두 실패했어요 ({last})")
+
+    def cache_summary(self, dataset: str) -> dict | None:
+        """관리 콘솔용: 이 데이터의 가장 최근 캐시(받은 시각, 전체 건수)."""
+        files = sorted(self._cache_dir.glob(f"{dataset}_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for f in files:
+            try:
+                payload = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if payload.get("rows"):
+                return {"fetchedAt": payload["fetched_at"], "total": payload["total"]}
+        return None
 
     def fetch(self, dataset: str, params: dict[str, Any] | None = None, *, max_rows: int | None = None) -> FetchResult:
         """조건에 맞는 행을 페이지를 넘기며 모두(또는 max_rows까지) 가져옵니다."""

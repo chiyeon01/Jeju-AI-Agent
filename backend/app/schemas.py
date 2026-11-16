@@ -55,21 +55,24 @@ class ProfileOut(BaseModel):
     hours: int | None = None
 
 
+# ── GET /regions/nearest ────────────────────────
+class NearestRegionOut(RegionOut):
+    distanceKm: float
+
+
 # ── POST /tourist/course ────────────────────────
-class OriginIn(BaseModel):
-    id: str | None = None
-    name: str | None = None
-    lat: float
-    lon: float
+class CourseOptions(BaseModel):
+    seafood: bool = False
+    removeCount: int = Field(0, ge=0, le=5)
 
 
 class CourseRequest(BaseModel):
     profile: ProfileOut
-    origin: OriginIn
+    regionId: str
+    startTime: str = Field("15:00", pattern=r"^\d{1,2}:\d{2}$")
+    hours: int | None = Field(None, ge=1, le=12)
     weather: Literal["clear", "rain"] = "clear"
-    startTime: str = "15:00"
-    removeCount: int = 0
-    seafood: bool = False
+    options: CourseOptions = Field(default_factory=CourseOptions)
 
 
 class CourseStopOut(PlaceOut):
@@ -77,8 +80,16 @@ class CourseStopOut(PlaceOut):
     move: int
 
 
+class WeatherOut(BaseModel):
+    code: Literal["clear", "rain"]
+    label: str
+    temp: int
+    icon: str
+    note: str
+
+
 class CourseOut(BaseModel):
-    weather: str
+    weather: WeatherOut
     stops: list[CourseStopOut]
 
 
@@ -107,12 +118,12 @@ class ReviewIn(BaseModel):
 
 
 class ReviewsRequest(BaseModel):
-    reviews: list[ReviewIn]
+    reviews: list[ReviewIn] = Field(max_length=10)
 
 
 class ReviewsOut(BaseModel):
-    ok: bool
     accepted: int
+    rejected: int = 0
 
 
 # ── POST /owner/ask ─────────────────────────────
@@ -126,13 +137,16 @@ class OwnerAskOut(BaseModel):
 
 # ── POST /owner/actions ─────────────────────────
 class OwnerActionRequest(BaseModel):
-    kind: str = "메뉴"
-    title: str
+    kind: str = Field("메뉴", max_length=20)
+    title: str = Field(min_length=1, max_length=100)
 
 
 class OwnerActionOut(BaseModel):
-    ok: bool
-    id: int | None = None
+    id: int
+    kind: str
+    title: str
+    status: str
+    createdAt: str
 
 
 # ── 지도(Kakao) ──────────────────────────────────
