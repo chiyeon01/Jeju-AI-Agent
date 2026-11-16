@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # 제주데이터허브 (실데이터 연동용, 비워두면 목업 데이터 사용)
     jeju_data_hub_api_key: str = ""
-    jeju_data_hub_base_url: str = "https://www.bigdata-jeju.kr/api"
+    jeju_data_hub_base_url: str = "https://open.jejudatahub.net/api/proxy"
 
     # 카카오맵(Kakao Local) REST API - 주소 검색, 좌표→행정동 변환
     kakao_rest_api_key: str = ""

@@ -50,6 +50,17 @@ uvicorn app.main:app --reload --port 8000
 | POST | `/map/geocode` | 주소 → 좌표 (카카오 주소 검색) |
 | POST | `/map/search` | 키워드 장소 검색 (카카오 키워드 검색, lat/lon 주면 가까운 순) |
 | POST | `/map/reverse-geocode` | 현재 위치 좌표 → 가장 가까운 서비스 지역 (+카카오 행정동 주소) |
+| GET | `/datahub/status` | 데이터허브 연동 상태, 오늘 데이터별 호출 수, 데이터 목록 |
+| GET | `/datahub/population?date=&emd=` | 내국인 유동인구 — 읍면동별·서비스 지역별 합계 (D2) |
+| GET | `/datahub/population/foreign?kind=short\|long` | 외국인 단기/장기체류 유동인구 — 국적별·읍면동별 (D2) |
+| GET | `/datahub/crowd?refresh=` | 서비스 지역별 혼잡도 지수 0~1 (코스 플래너가 사용) |
+| GET | `/datahub/weather?date=&observatory=` | 관측소별 일별 기상 (D7, 허브 데이터가 오래돼 참고용) |
+| GET | `/datahub/sights?start=&end=&name=` | 관광지별 내·외국인 유입자 수, 월 단위 (D4) |
+| GET | `/datahub/bus/stations?name=` | 버스 정류소 (D6) |
+| GET | `/datahub/bus/routes?startStationId=` | 버스 노선 (D6) |
+| GET | `/datahub/bus/usage?date=&top=` | 정류소별 하루 이용자 수 상위 (D6) |
+| GET | `/datahub/wifi?date=&name=&top=` | 와이파이 AP그룹별 사용자 수 + 전체 사용자 수 (D3) |
+| GET | `/datahub/raw/{dataset}?...` | 허브 원본 그대로 (탐색용) |
 | GET | `/health` | 서버·GPT·카카오맵 연동 상태 확인 |
 
 ### 카카오맵 키 2종
@@ -86,22 +97,37 @@ backend/
       review_service.py    평가 저장 + 고객 만족 지수 재계산
       kakao_service.py     카카오 Local REST API 호출 래퍼
       map_service.py       지도 도구 (카카오 + 로컬 최근접 지역 대체)
+      datahub_client.py    제주데이터허브 호출 (재시도·페이지·쿼터·디스크 캐시)
+      datahub_service.py   허브 데이터 가공 (최신 날짜 찾기, 읍면동·지역 합계, 혼잡도)
       geo.py                위경도 거리·이동시간 계산
+    data/datahub_catalog.py  허브 API 11종 코드·요청변수, 서비스 지역 ↔ 읍면동 매핑
     routers/
-      tourist.py / owner.py / map.py   엔드포인트 정의
-  storage/               SQLite 파일 저장 위치 (.env 의 DATABASE_PATH)
+      tourist.py / owner.py / map.py / datahub.py   엔드포인트 정의
+  storage/               SQLite 파일, datahub_cache/ (허브 응답 캐시·호출 수)
 ```
 
-## 6. 실데이터(제주데이터허브) 연동 시
+## 6. 제주데이터허브 연동
 
-지금은 `app/data/*.py` 에 시연용 합성 데이터가 들어 있습니다. 실제 데이터로 바꿀 때는:
+`.env` 의 `JEJU_DATA_HUB_API_KEY` 에 허브 **프로젝트 키**를 넣으면 켜집니다
+(허브 마이페이지 → 프로젝트 관리 → 프로젝트 → 프로젝트키). 데이터는 그 프로젝트에
+"프로젝트 담기"가 되어 있어야 호출됩니다. 지금 담긴 API 11종은 `app/data/datahub_catalog.py` 에 있습니다.
 
-1. `.env` 의 `JEJU_DATA_HUB_API_KEY` / `JEJU_DATA_HUB_BASE_URL` 을 채웁니다.
-2. `app/data/tourist_data.py` 의 `PLACES`/`REGIONS`, `app/data/owner_data.py` 의
-   `STORE`/`INDICATORS` 를 실제 DB 조회 함수로 바꿉니다. 위 모듈을 가져다 쓰는
-   `services/*.py` 는 함수 시그니처가 같으면 수정할 필요가 없습니다.
-3. 숫자 계산(지표, 장소 점수)은 그대로 Python/SQL로 두고, GPT는 설명·대화 생성에만
-   쓰는 원칙(기획/서비스_기획서_초안.md 5.4절)을 유지하세요.
+**지금 실데이터를 쓰는 곳**
+- 코스 플래너의 혼잡도(w4): 최신 날짜 유동인구로 지역 혼잡도 지수를 계산해 점수에서 빼고,
+  각 장소의 D2 근거 문장을 실측값("읍면동 방문인구 하루 98,418명 · 제주 평균 대비 -12% …")으로 바꿉니다.
+  서버 시작 시 백그라운드에서 계산하며, 실패하면 1분 간격으로 다시 시도하고 그동안 코스는 혼잡도 없이 동작합니다.
+- 나머지는 `/api/datahub/*` 로 조회만 가능 (상권 지표 등은 아직 합성 데이터).
+
+**허브 API 특성 (2026-11 실제 호출로 확인)**
+- 같은 요청도 500/502가 자주 섞임 → 6회 재시도. 특정 날짜는 계속 실패하기도 해서, 날짜를 비운 요청은 하루씩 앞 날짜로 최대 3번 물러납니다.
+- 한 번에 최대 100건 (`limit` 100 초과 시 오류) → `number` 로 페이지를 넘깁니다.
+- 데이터마다 하루 1,000회 쿼터 → 950회에서 멈춤. 지난 날짜 결과는 `storage/datahub_cache/` 에 영구 캐시.
+- 데이터 시점: 유동인구 약 2~3개월 지연, 와이파이·버스는 거의 최신, 관광지 유입은 2024-12까지,
+  기상은 오래된 데이터만 있어 실시간 날씨로는 못 씁니다 (날씨 전환은 여전히 프론트가 보내는 값 사용).
+- 처음 조회하는 날짜는 느립니다 (유동인구 하루치 7회, 버스 이용 하루치 40~60회 호출).
+
+숫자 계산(지표, 장소 점수)은 Python으로 하고, GPT는 설명·대화 생성에만 쓰는 원칙
+(기획/서비스_기획서_초안.md 5.4절)을 유지하세요.
 
 ## 7. 주의
 
