@@ -6,6 +6,22 @@ AI 응답(성향 설명, 코스 대화 수정, 상권 Agent 질의)은 **GPT(Ope
 
 ## 1. 준비물
 
+### 서버 배포 (Docker)
+
+프로젝트 루트에서 `docker compose up -d --build`로 실행합니다.
+기존 `compose_default` Docker 네트워크와 Nginx Proxy Manager를 사용하며,
+`jejuai.duckdns.org`의 요청을 `jeju-ai-backend:8000`으로 전달합니다.
+
+- API 기본 주소: `https://jejuai.duckdns.org/api/v1`
+- API 문서: `https://jejuai.duckdns.org/docs`
+- WebSocket: `wss://jejuai.duckdns.org/ws/events`
+- 상태 확인: `docker compose ps`
+- 로그 확인: `docker compose logs --tail=100 backend`
+- 중지: `docker compose stop backend`
+
+키는 `backend/.env`, 데이터베이스와 캐시는 `backend/storage/`에 보관합니다.
+Docker 시작 시 자동으로 재실행되며, HTTPS 인증서는 Nginx Proxy Manager에서 관리합니다.
+
 - Python 3.11 이상
 - OpenAI API 키 (https://platform.openai.com/api-keys)
 
