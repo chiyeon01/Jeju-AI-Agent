@@ -1,159 +1,75 @@
-import { useEffect, useRef, useState } from 'react';
-import JejuMap from '../../components/JejuMap.jsx';
-import { Sparkline } from '../../components/Charts.jsx';
-import { REGIONS } from '../../mock/tourist.js';
+import { useEffect, useState } from 'react';
+import KakaoMap from '../../components/KakaoMap.jsx';
 import {
-  REGION_HEALTH, POPULAR_COURSES, EVENT_TYPES, EVENT_SAMPLES, SOURCES, DERIVED, QUALITY,
-  ACCOUNTS, ACCESS_LOG, MASKING, BACKUPS, RETENTION,
-} from '../../mock/console.js';
+  getAdminOverview, getAdminData, getAdminSecurity, updateUser, getAdminBackups, requestBackup, restoreBackup, subscribeEvents,
+} from '../../api/client.js';
+import { ROLE_LABEL } from '../../mock/auth.js';
 
-const TABS = [
-  { id: 'overview', label: '통합 현황' },
-  { id: 'data', label: '데이터 관리' },
-  { id: 'security', label: '접근·보안' },
-  { id: 'backup', label: '백업·복구' },
-];
-const STATUS = { ok: ['good', '정상'], warn: ['warn', '주의'], err: ['bad', '오류'] };
-const pad = (n) => String(n).padStart(2, '0');
-const now = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const TABS = ['현황', '데이터', '계정·보안', '백업'];
+const scoreColor = (s) => (s >= 70 ? '#2e8b57' : s >= 60 ? '#87CEEB' : '#d0534a');
+const LEVEL = { ok: 'good', good: 'good', warn: 'warn', err: 'bad', bad: 'bad' };
 
-// 실시간 이벤트 스트림 (실서비스: VITE_EVENT_STREAM_URL WebSocket 구독)
-function useLiveEvents() {
-  const [events, setEvents] = useState(() => EVENT_SAMPLES.slice(0, 6).map(([type, text], i) => ({ id: i, type, text, at: `09:1${5 - Math.min(i, 5)}:0${i}` })));
-  const [totals, setTotals] = useState({ visits: 9770, reviews: 1129, courses: 3412, eps: 42 });
-  const [eps, setEps] = useState([31, 35, 38, 33, 40, 44, 39, 42, 46, 41, 43, 42]);
-  const seq = useRef(100);
-  useEffect(() => {
-    const t = setInterval(() => {
-      const [type, text] = EVENT_SAMPLES[Math.floor(Math.random() * EVENT_SAMPLES.length)];
-      seq.current += 1;
-      setEvents((e) => [{ id: seq.current, type, text, at: now(), fresh: true }, ...e].slice(0, 30));
-      setTotals((s) => ({
-        visits: s.visits + (type === '방문 인증' ? 1 : 0),
-        reviews: s.reviews + (type === '평가 등록' ? 1 : 0),
-        courses: s.courses + (type === '코스 선택' ? 1 : 0),
-        eps: 36 + Math.round(Math.random() * 14),
-      }));
-      setEps((x) => [...x.slice(1), 36 + Math.round(Math.random() * 14)]);
-    }, 2600);
-    return () => clearInterval(t);
-  }, []);
-  return { events, totals, eps };
+function useLoad(fn) {
+  const [data, setData] = useState(null);
+  useEffect(() => { fn().then(setData); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return [data, setData];
 }
 
 function Overview() {
-  const { events, totals, eps } = useLiveEvents();
-  const pillOf = Object.fromEntries(EVENT_TYPES.map((e) => [e.type, e.pill]));
-  const ranked = REGIONS.map((r) => ({ ...r, ...REGION_HEALTH[r.id] })).sort((a, b) => b.score - a.score);
+  const [d] = useLoad(getAdminOverview);
+  const [events, setEvents] = useState([]);
+  useEffect(() => subscribeEvents((e) => setEvents((x) => [e, ...x].slice(0, 30))), []);
+  if (!d) return <p className="muted">불러오는 중…</p>;
+  const o = d.overview;
   return (
-    <div className="stack" style={{ gap: 20 }}>
+    <div className="stack">
       <div className="grid g4">
-        <div className="card kpi"><span className="eyebrow">오늘 방문 인증</span><span className="v">{totals.visits.toLocaleString()}</span><span className="small muted">어제 같은 시각 대비 +6%</span></div>
-        <div className="card kpi"><span className="eyebrow">오늘 평가</span><span className="v">{totals.reviews.toLocaleString()}</span><span className="small muted">허위 의심 차단 7건</span></div>
-        <div className="card kpi"><span className="eyebrow">오늘 코스 선택</span><span className="v">{totals.courses.toLocaleString()}</span><span className="small muted">완주율 63%</span></div>
-        <div className="card kpi">
-          <span className="eyebrow">이벤트 처리량</span>
-          <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-            <span className="v">{totals.eps}<small className="small muted"> /초</small></span>
-            <Sparkline data={eps} width={90} height={34} />
-          </div>
-          <span className="small muted">평균 지연 0.8초</span>
-        </div>
+        {[['오늘 방문 인증', o.visits], ['오늘 평가', o.reviews], ['오늘 만든 코스', o.courses], ['초당 이벤트', o.eventsPerSec]].map(([k, v]) => (
+          <div key={k} className="card metric"><span className="label">{k}</span><div className="v num">{v.toLocaleString()}</div></div>
+        ))}
       </div>
-
-      <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', alignItems: 'start' }} data-layout="console-main">
-        <div className="card">
-          <div className="card-head">
-            <h3>지역별 상권 건강 점수 · 인기 코스 흐름</h3>
-            <div className="row small" style={{ gap: 10 }}>
-              <span style={{ color: 'var(--good)' }}>● 70+</span>
-              <span style={{ color: 'var(--sea)' }}>● 60–69</span>
-              <span style={{ color: 'var(--warn)' }}>● 55–59</span>
-              <span style={{ color: 'var(--bad)' }}>● 55 미만</span>
-            </div>
-          </div>
-          <JejuMap health={REGION_HEALTH} flows={POPULAR_COURSES} />
-          <p className="small muted" style={{ marginTop: 8 }}>원 크기 = 오늘 방문 인증 수, 점선 굵기 = 코스 선택 수</p>
-        </div>
-        <div className="card">
-          <div className="card-head">
-            <h3>실시간 이벤트</h3>
-            <span className="pill good live"><span className="dot" /> 수신 중</span>
-          </div>
-          <ul className="feed" aria-live="off">
-            {events.map((e) => (
-              <li key={e.id} className={e.fresh ? 'new' : ''}>
-                <span className="num muted small">{e.at}</span>
-                <span><span className={`pill ${pillOf[e.type]}`}>{e.type}</span></span>
-                <span style={{ minWidth: 0 }}>{e.text}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      <div className="grid g2">
-        <div className="card">
-          <div className="card-head"><h3>지역 순위</h3><span className="small muted">상권 건강 점수 평균</span></div>
+      <div className="grid g2" style={{ alignItems: 'start' }}>
+        <div className="card stack">
+          <h3>지역별 상권 점수</h3>
+          <KakaoMap circles={d.health.map((h) => ({ lat: h.lat, lon: h.lon, radius: 4000, color: scoreColor(h.score), text: `${h.name} ${h.score}` }))} />
           <div className="table-wrap">
             <table className="data">
-              <thead><tr><th>지역</th><th>점수</th><th style={{ textAlign: 'right' }}>방문</th><th style={{ textAlign: 'right' }}>평가</th></tr></thead>
+              <thead><tr><th>지역</th><th className="r">점수</th><th className="r">방문</th><th className="r">평가</th></tr></thead>
               <tbody>
-                {ranked.map((r) => (
-                  <tr key={r.id}>
-                    <td>{r.name}</td>
-                    <td style={{ minWidth: 120 }}>
-                      <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
-                        <div className="bar" style={{ flex: 1 }}><span style={{ width: `${r.score}%`, background: r.score >= 70 ? 'var(--good)' : r.score >= 60 ? 'var(--sea)' : r.score >= 55 ? 'var(--warn)' : 'var(--bad)' }} /></div>
-                        <span className="num">{r.score}</span>
-                      </div>
-                    </td>
-                    <td className="num" style={{ textAlign: 'right' }}>{r.visits.toLocaleString()}</td>
-                    <td className="num" style={{ textAlign: 'right' }}>{r.reviews}</td>
-                  </tr>
+                {[...d.health].sort((a, b) => b.score - a.score).map((h) => (
+                  <tr key={h.regionId}><td>{h.name}</td><td className="r num">{h.score}</td><td className="r num">{h.visits.toLocaleString()}</td><td className="r num">{h.reviews}</td></tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
         <div className="card">
-          <div className="card-head"><h3>인기 코스</h3><span className="small muted">오늘 선택·완주 기준</span></div>
-          <div className="stack" style={{ gap: 12 }}>
-            {POPULAR_COURSES.map((c, i) => (
-              <div key={c.name} className="row" style={{ flexWrap: 'nowrap', alignItems: 'flex-start' }}>
-                <span className="num" style={{ color: 'var(--accent)', width: 20 }}>{i + 1}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div>{c.name}</div>
-                  <div className="small muted">주 이용 성향 · {c.type}</div>
-                </div>
-                <span className="num small">{c.count}</span>
-              </div>
-            ))}
-          </div>
+          <div className="head"><h3>실시간 이벤트</h3><span className="live" aria-hidden="true" /></div>
+          <ul className="feed" aria-live="polite">
+            {events.length === 0 && <li><span /><span className="muted">이벤트를 기다리는 중…</span></li>}
+            {events.map((e, i) => <li key={`${e.at}-${i}`}><span className="num muted">{e.at}</span><span><b>{e.type}</b> {e.text}</span></li>)}
+          </ul>
         </div>
       </div>
     </div>
   );
 }
 
-function DataManage() {
+function DataTab() {
+  const [d] = useLoad(getAdminData);
+  if (!d) return <p className="muted">불러오는 중…</p>;
   return (
-    <div className="stack" style={{ gap: 20 }}>
+    <div className="stack">
       <div className="card">
-        <div className="card-head"><h3>원천 데이터 적재 이력</h3><span className="small muted">제주데이터허브 · 매일 API는 03시 일 배치</span></div>
+        <h3 style={{ marginBottom: 10 }}>원천 데이터 (제주데이터허브)</h3>
         <div className="table-wrap">
           <table className="data">
-            <thead><tr><th>코드</th><th>데이터</th><th>갱신 주기</th><th>기준 시점</th><th>마지막 적재</th><th style={{ textAlign: 'right' }}>누적 행</th><th>상태</th></tr></thead>
+            <thead><tr><th>코드</th><th>데이터</th><th>주기</th><th>기준</th><th>마지막 적재</th><th className="r">행 수</th><th>상태</th></tr></thead>
             <tbody>
-              {SOURCES.map((s) => (
+              {d.sources.map((s) => (
                 <tr key={s.id}>
-                  <td className="num">{s.id}</td>
-                  <td>{s.name}{s.note && <div className="small muted">{s.note}</div>}</td>
-                  <td>{s.cycle}</td>
-                  <td className="num">{s.basis}</td>
-                  <td className="num">{s.last}</td>
-                  <td className="num" style={{ textAlign: 'right' }}>{s.rows}</td>
-                  <td><span className={`pill ${STATUS[s.status][0]}`}>{STATUS[s.status][1]}</span></td>
+                  <td className="num">{s.id}</td><td>{s.name}</td><td>{s.cycle}</td><td className="num">{s.basis}</td><td className="num">{s.last}</td><td className="r num">{s.rows}</td>
+                  <td><span className={`pill ${LEVEL[s.status]}`}>{s.status === 'ok' ? '정상' : s.note}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -161,32 +77,17 @@ function DataManage() {
         </div>
       </div>
       <div className="grid g2" style={{ alignItems: 'start' }}>
-        <div className="card">
-          <div className="card-head"><h3>실시간 생성 데이터</h3><span className="small muted">이벤트 → Redis Streams → 처리 워커</span></div>
-          <div className="table-wrap">
-            <table className="data">
-              <thead><tr><th>데이터</th><th>저장소</th><th>반영 지연</th></tr></thead>
-              <tbody>
-                {DERIVED.map((d) => (
-                  <tr key={d.name}><td><b>{d.name}</b><div className="small muted">{d.desc}</div></td><td className="num small">{d.store}</td><td className="num">{d.lag}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="card stack">
+          <h3>파생 데이터</h3>
+          {d.derived.map((x) => (
+            <div key={x.name} className="row between small"><span><b>{x.name}</b> <span className="muted">{x.desc}</span></span><span className="pill">{x.lag}</span></div>
+          ))}
         </div>
-        <div className="card">
-          <div className="card-head"><h3>품질 점검</h3><span className="small muted">오늘 03:40 실행</span></div>
-          <div className="stack" style={{ gap: 0 }}>
-            {QUALITY.map((q) => (
-              <div key={q.check + q.target} className="row" style={{ padding: '10px 0', borderBottom: '1px solid var(--line)', flexWrap: 'nowrap', alignItems: 'flex-start' }}>
-                <span className={`pill ${q.level}`} style={{ minWidth: 64, justifyContent: 'center' }}>{q.check}</span>
-                <div style={{ minWidth: 0 }}>
-                  <div className="small" style={{ fontWeight: 600 }}>{q.target}</div>
-                  <div className="small muted">{q.result}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="card stack">
+          <h3>품질 점검</h3>
+          {d.quality.map((x) => (
+            <div key={x.check + x.target} className="row between small"><span><b>{x.check}</b> {x.target} <span className="muted">· {x.result}</span></span><span className={`pill ${LEVEL[x.level]}`}>{x.level === 'good' ? '정상' : x.level === 'warn' ? '주의' : '조치'}</span></div>
+          ))}
         </div>
       </div>
     </div>
@@ -194,16 +95,25 @@ function DataManage() {
 }
 
 function Security() {
+  const [d, setD] = useLoad(getAdminSecurity);
+  if (!d) return <p className="muted">불러오는 중…</p>;
+  const approve = async (u) => {
+    await updateUser(u.id, { status: 'ACTIVE' });
+    setD({ ...d, users: d.users.map((x) => (x.id === u.id ? { ...x, status: 'ACTIVE' } : x)) });
+  };
   return (
-    <div className="stack" style={{ gap: 20 }}>
+    <div className="stack">
       <div className="card">
-        <div className="card-head"><h3>계정별 권한</h3><button className="btn sm">계정 추가</button></div>
+        <h3 style={{ marginBottom: 10 }}>계정</h3>
         <div className="table-wrap">
           <table className="data">
-            <thead><tr><th>계정</th><th>역할</th><th>권한 범위</th><th>마지막 접속</th></tr></thead>
+            <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th>최근 접속</th><th /></tr></thead>
             <tbody>
-              {ACCOUNTS.map((a) => (
-                <tr key={a.name}><td>{a.name}</td><td><span className={`pill ${a.role === '관리자' ? 'accent' : a.role === '서비스' ? 'sea' : ''}`}>{a.role}</span></td><td>{a.scope}</td><td className="num">{a.last}</td></tr>
+              {d.users.map((u) => (
+                <tr key={u.id ?? u.name}>
+                  <td>{u.name}</td><td className="muted">{u.email}</td><td>{ROLE_LABEL[u.role]}</td><td className="num">{u.last}</td>
+                  <td className="r">{u.status === 'PENDING' ? <button className="btn sm primary" onClick={() => approve(u)}>가입 승인</button> : <span className={`pill ${u.status === 'ACTIVE' ? 'good' : 'bad'}`}>{u.status === 'ACTIVE' ? '사용 중' : '정지'}</span>}</td>
+                </tr>
               ))}
             </tbody>
           </table>
@@ -211,96 +121,69 @@ function Security() {
       </div>
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <div className="card">
-          <div className="card-head"><h3>조회·반출 로그</h3></div>
+          <h3 style={{ marginBottom: 10 }}>접근 기록</h3>
           <div className="table-wrap">
             <table className="data">
-              <thead><tr><th>시각</th><th>계정</th><th>요청</th><th>결과</th></tr></thead>
               <tbody>
-                {ACCESS_LOG.map((l) => (
-                  <tr key={l.at + l.who}><td className="num">{l.at}</td><td>{l.who}<div className="small muted">{l.target}</div></td><td>{l.action}</td><td><span className={`pill ${l.ok ? 'good' : 'bad'}`}>{l.ok ? '허용' : '거부'}</span></td></tr>
+                {d.logs.map((l) => (
+                  <tr key={l.at + l.who}><td className="num">{l.at}</td><td>{l.who}<div className="small muted">{l.action} · {l.target}</div></td><td className="r"><span className={`pill ${l.ok ? 'good' : 'bad'}`}>{l.ok ? '허용' : '차단'}</span></td></tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
-        <div className="card">
-          <div className="card-head"><h3>개인 식별 위험 마스킹 규칙</h3></div>
-          <div className="stack" style={{ gap: 0 }}>
-            {MASKING.map((m) => (
-              <div key={m.rule} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
-                <div className="small" style={{ fontWeight: 600 }}>{m.rule}</div>
-                <div className="small muted">{m.how}</div>
-              </div>
-            ))}
-          </div>
+        <div className="card stack">
+          <h3>개인정보 보호 규칙</h3>
+          {d.masking.map((m) => <div key={m.rule} className="small"><b>{m.rule}</b> <span className="muted">{m.how}</span></div>)}
         </div>
       </div>
     </div>
   );
 }
 
-function Backup() {
+function Backups() {
+  const [d] = useLoad(getAdminBackups);
   const [msg, setMsg] = useState('');
+  if (!d) return <p className="muted">불러오는 중…</p>;
   return (
     <div className="grid g2" style={{ alignItems: 'start' }}>
-      <div className="card">
-        <div className="card-head">
-          <h3>스냅샷 이력</h3>
-          <button className="btn sm dark" onClick={() => setMsg('수동 스냅샷 요청을 보냈어요. (목업)')}>지금 백업</button>
+      <div className="card stack">
+        <div className="head" style={{ marginBottom: 0 }}>
+          <h3>백업</h3>
+          <button className="btn sm primary" onClick={async () => setMsg((await requestBackup()).message)}>지금 백업</button>
         </div>
-        {msg && <p className="mock-note" style={{ marginBottom: 10 }}>{msg}</p>}
+        {msg && <p className="note">{msg}</p>}
         <div className="table-wrap">
           <table className="data">
-            <thead><tr><th>시각</th><th>종류</th><th style={{ textAlign: 'right' }}>크기</th><th>상태</th><th /></tr></thead>
             <tbody>
-              {BACKUPS.map((b) => (
-                <tr key={b.at}>
-                  <td className="num">{b.at}</td><td>{b.kind}</td><td className="num" style={{ textAlign: 'right' }}>{b.size}</td>
-                  <td><span className="pill good">완료</span></td>
-                  <td><button className="btn sm ghost" onClick={() => setMsg(`${b.at} 스냅샷 복구는 관리자 2인 승인이 필요해요. (목업)`)}>복구</button></td>
-                </tr>
+              {d.backups.map((b) => (
+                <tr key={b.at}><td className="num">{b.at}</td><td>{b.kind}</td><td className="r num">{b.size}</td>
+                  <td className="r"><button className="btn sm" onClick={async () => setMsg((await restoreBackup(b.at)).message)}>복구</button></td></tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
-      <div className="card">
-        <div className="card-head"><h3>보관 기간 정책</h3></div>
-        <div className="table-wrap">
-          <table className="data">
-            <tbody>
-              {RETENTION.map((r) => <tr key={r.what}><td>{r.what}</td><td className="num" style={{ textAlign: 'right' }}>{r.keep}</td></tr>)}
-            </tbody>
-          </table>
-        </div>
-        <p className="small muted" style={{ marginTop: 12 }}>저장소: PostgreSQL + PostGIS, TimescaleDB, pgvector (Main PC)</p>
+      <div className="card stack">
+        <h3>보관 기간</h3>
+        {d.retention.map((r) => <div key={r.what} className="row between small"><span>{r.what}</span><b>{r.keep}</b></div>)}
       </div>
     </div>
   );
 }
 
 export default function MainConsole() {
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(0);
   return (
     <main className="page">
-      <div className="card-head" style={{ marginBottom: 20 }}>
-        <div>
-          <p className="eyebrow">제주시 Main PC</p>
-          <h1 style={{ fontSize: '2.1rem' }}>통합 데이터 관리 콘솔</h1>
-        </div>
-        <span className="pill">2026-11-10 · 시연용 합성 데이터</span>
+      <h1 style={{ marginBottom: 12 }}>통합 관리</h1>
+      <div className="tabs" role="tablist">
+        {TABS.map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? 'on' : ''} onClick={() => setTab(i)}>{t}</button>)}
       </div>
-      <div className="console-shell">
-        <nav className="console-side" aria-label="콘솔 메뉴">
-          {TABS.map((t) => <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>{t.label}</button>)}
-        </nav>
-        <div style={{ minWidth: 0 }}>
-          {tab === 'overview' && <Overview />}
-          {tab === 'data' && <DataManage />}
-          {tab === 'security' && <Security />}
-          {tab === 'backup' && <Backup />}
-        </div>
-      </div>
+      {tab === 0 && <Overview />}
+      {tab === 1 && <DataTab />}
+      {tab === 2 && <Security />}
+      {tab === 3 && <Backups />}
     </main>
   );
 }

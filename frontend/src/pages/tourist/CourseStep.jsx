@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import JejuMap from '../../components/JejuMap.jsx';
-import TypeCard from './TypeCard.jsx';
-import { Stars } from '../../components/Charts.jsx';
+import KakaoMap from '../../components/KakaoMap.jsx';
 import { KIND_LABEL, WEATHER } from '../../mock/tourist.js';
 import { planCourse, chatCourse } from '../../api/client.js';
 
@@ -10,21 +8,18 @@ const SUGGEST = ['저녁은 해산물로 바꿔줘', '1곳 줄여줘', '실내�
 export default function CourseStep({ profile, origin, onDone, onBack }) {
   const [opts, setOpts] = useState({ weather: 'clear', seafood: false, removeCount: 0 });
   const [course, setCourse] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [msgs, setMsgs] = useState([{ from: 'ai', text: `${profile.name}님을 위해 ${origin.name}에서 출발하는 코스를 짰어요. 바꾸고 싶은 점을 말해 주세요.` }]);
+  const [msgs, setMsgs] = useState([{ from: 'ai', text: `${origin.name}에서 출발하는 코스예요. 바꾸고 싶은 점을 말해 주세요.` }]);
   const [text, setText] = useState('');
   const chatRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
-    planCourse({ profile, origin, startTime: profile.startTime, ...opts }).then((c) => {
-      if (alive) { setCourse(c); setLoading(false); }
-    });
+    setCourse(null);
+    planCourse({ profile, origin, startTime: profile.startTime, ...opts }).then((c) => alive && setCourse(c));
     return () => { alive = false; };
   }, [opts, profile, origin]);
 
-  useEffect(() => { chatRef.current?.scrollTo({ top: 99999, behavior: 'smooth' }); }, [msgs]);
+  useEffect(() => { chatRef.current?.scrollTo({ top: 99999 }); }, [msgs]);
 
   const send = async (m) => {
     const message = (m ?? text).trim();
@@ -39,63 +34,41 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
   const w = WEATHER[opts.weather];
 
   return (
-    <section className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)', alignItems: 'start' }} data-layout="course">
+    <section className="grid g2" style={{ alignItems: 'start' }}>
       <div className="stack">
-        <div className="card-head" style={{ marginBottom: 0 }}>
+        <div className="head" style={{ marginBottom: 0 }}>
           <div>
-            <p className="eyebrow">AI 코스 플래너 · {origin.name} 출발</p>
-            <h2>오늘의 {profile.companion} 코스</h2>
+            <span className="label">{origin.name} 출발 · {profile.name}</span>
+            <h2>오늘의 추천 코스</h2>
           </div>
-          <div className="seg" role="group" aria-label="날씨 시뮬레이션">
+          <div className="seg" role="group" aria-label="날씨">
             {Object.entries(WEATHER).map(([k, v]) => (
-              <button key={k} className={opts.weather === k ? 'on' : ''} onClick={() => setOpts((o) => ({ ...o, weather: k }))}>{v.icon} {v.label}</button>
+              <button key={k} className={opts.weather === k ? 'on' : ''} onClick={() => setOpts((o) => ({ ...o, weather: k }))}>{v.label}</button>
             ))}
           </div>
         </div>
-        <p className={`pill ${opts.weather === 'rain' ? 'warn' : 'sea'}`} style={{ alignSelf: 'flex-start' }}>
-          {w.icon} {w.label} {w.temp}°C · {w.note}
-        </p>
-
-        <div className="card" aria-busy={loading}>
-          {loading || !course ? (
-            <p className="muted">장소 후보를 점수화하고 이동 순서를 정하는 중…</p>
-          ) : (
-            <ol className="timeline">
-              {course.stops.map((s, i) => (
-                <li key={s.id} className="tl-item">
-                  <div className="tl-time">{s.at}</div>
-                  <div className="tl-rail"><b /></div>
-                  <div className="tl-body">
-                    {i > 0 && <div className="small muted">↓ {profile.transport === '렌터카' ? '차로' : '버스로'} 약 {s.move}분</div>}
-                    <div className="row" style={{ gap: 8, marginTop: 2 }}>
-                      <strong style={{ fontSize: '1.05rem' }}>{s.name}</strong>
-                      <span className="pill">{KIND_LABEL[s.kind]}</span>
-                      {s.indoor && <span className="pill sea">실내</span>}
-                    </div>
-                    <div className="row small muted" style={{ gap: 8 }}>
-                      <Stars value={Math.round(s.rating)} /> <span className="num">{s.rating}</span> · 머무는 시간 {s.stay}분
-                    </div>
-                    <div className="stack" style={{ gap: 4, marginTop: 8 }}>
-                      {s.reasons.map(([src, r]) => (
-                        <div key={r} className="reason"><span className="src">{src}</span><span>{r}</span></div>
-                      ))}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
+        <p className="note">{w.icon} {w.label} {w.temp}°C · {w.note}</p>
+        <div className="card" aria-busy={!course}>
+          {!course ? <p className="muted">코스를 만드는 중…</p> : course.stops.map((s, i) => (
+            <div key={s.id} className="stop">
+              <span className="t num">{s.at}</span>
+              <div className="stack" style={{ gap: 4 }}>
+                {i > 0 && <span className="small muted">이동 약 {s.move}분</span>}
+                <div className="row" style={{ gap: 8 }}>
+                  <strong>{s.name}</strong>
+                  <span className="pill">{KIND_LABEL[s.kind]}</span>
+                </div>
+                {s.reasons.slice(0, 1).map(([src, r]) => <div key={r} className="reason"><b>{src}</b>{r}</div>)}
+              </div>
+            </div>
+          ))}
         </div>
-        <p className="small muted">
-          장소 점수 = 성향 적합도 + 데이터 인기도 + 평가 점수 − 혼잡도 − 이동시간 + 날씨 적합도. 이동 순서는 그리디 + 2-opt로 정합니다.
-        </p>
       </div>
 
       <div className="stack">
-        <TypeCard profile={profile} compact />
-        <JejuMap origin={origin} stops={course?.stops} />
+        <KakaoMap center={origin} level={9} path markers={(course?.stops ?? []).map((s) => ({ lat: s.lat, lon: s.lon, text: s.name }))} />
         <div className="card">
-          <div className="card-head"><h3>대화로 코스 고치기</h3></div>
+          <h3 style={{ marginBottom: 10 }}>대화로 코스 고치기</h3>
           <div className="chat" ref={chatRef} aria-live="polite">
             {msgs.map((m, i) => <div key={i} className={`bubble ${m.from}`}>{m.text}</div>)}
           </div>
@@ -103,11 +76,11 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
             {SUGGEST.map((s) => <button key={s} type="button" className="chip" onClick={() => send(s)}>{s}</button>)}
           </div>
           <form className="chat-input" onSubmit={(e) => { e.preventDefault(); send(); }}>
-            <input id="course-chat" className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="예: 카페는 바다 보이는 곳으로" />
-            <button className="btn dark" type="submit">보내기</button>
+            <input className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="예: 카페는 바다 보이는 곳으로" aria-label="코스 수정 요청" />
+            <button className="btn primary" type="submit">보내기</button>
           </form>
         </div>
-        <div className="row" style={{ justifyContent: 'space-between' }}>
+        <div className="row between">
           <button className="btn ghost" onClick={onBack}>위치 다시 고르기</button>
           <button className="btn primary" disabled={!course} onClick={() => onDone(course)}>여행 끝, 평가하기</button>
         </div>

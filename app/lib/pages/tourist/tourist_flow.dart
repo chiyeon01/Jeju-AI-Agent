@@ -1,4 +1,4 @@
-// 관광객 4단계 흐름: 성향 테스트 → 위치 선택 → AI 코스 → 방문 평가 (React 의 TouristFlow.jsx)
+// 관광객: 성향 테스트 → 출발 지역 → AI 코스 → 방문 평가
 import 'package:material_ui/material_ui.dart';
 
 import '../../api/client.dart';
@@ -10,34 +10,19 @@ import 'location_step.dart';
 import 'personality_test.dart';
 import 'review_step.dart';
 
-const _steps = ['성향 테스트', '위치 선택', 'AI 코스', '방문 평가'];
-
 class TouristFlow extends StatefulWidget {
   const TouristFlow({super.key});
-
   @override
   State<TouristFlow> createState() => _TouristFlowState();
 }
 
 class _TouristFlowState extends State<TouristFlow> {
-  final _scroll = ScrollController();
   int _step = 0;
   Profile? _profile;
   Region? _origin;
   Course? _course;
 
-  void _go(int n) {
-    setState(() => _step = n);
-    if (_scroll.hasClients) {
-      _scroll.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-    }
-  }
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
+  void _go(int n) => setState(() => _step = n);
 
   @override
   Widget build(BuildContext context) {
@@ -46,88 +31,53 @@ class _TouristFlowState extends State<TouristFlow> {
           _profile = p;
           _go(1);
         }),
-      1 => LocationStep(
-          profile: _profile!,
-          onBack: () => _go(0),
-          onDone: (o) {
-            _origin = o;
-            _go(2);
-          }),
-      2 => CourseStep(
-          profile: _profile!,
-          origin: _origin!,
-          onBack: () => _go(1),
-          onDone: (c) {
-            _course = c;
-            _go(3);
-          }),
-      _ => ReviewStep(
-          profile: _profile!,
-          course: _course!,
-          onRestart: () {
-            _profile = null;
-            _origin = null;
-            _course = null;
-            _go(0);
-          }),
+      1 => LocationStep(profile: _profile!, onBack: () => _go(0), onDone: (r) {
+          _origin = r;
+          _go(2);
+        }),
+      2 => CourseStep(profile: _profile!, origin: _origin!, onBack: () => _go(1), onDone: (c) {
+          _course = c;
+          _go(3);
+        }),
+      _ => ReviewStep(profile: _profile!, course: _course!, onRestart: () {
+          _profile = null;
+          _origin = null;
+          _course = null;
+          _go(0);
+        }),
     };
-
     return PageBody(
-      controller: _scroll,
-      narrow: _step == 0 || _step == 3,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _Stepper(step: _step),
-          const SizedBox(height: 24),
-          KeyedSubtree(key: ValueKey(_step), child: body),
-        ],
-      ),
+      key: ValueKey(_step),
+      narrow: _step != 2,
+      children: [
+        Semantics(
+          label: '${_step + 1} / 4 단계',
+          child: Row(children: [
+            for (var i = 0; i < 4; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              Expanded(child: Container(height: 4, decoration: BoxDecoration(color: i <= _step ? C.sky : C.line, borderRadius: BorderRadius.circular(999)))),
+            ],
+          ]),
+        ),
+        body,
+      ],
     );
   }
 }
 
-class _Stepper extends StatelessWidget {
-  const _Stepper({required this.step});
-  final int step;
-
+/// 내 여행 유형 카드
+class TypeCard extends StatelessWidget {
+  const TypeCard({super.key, required this.profile});
+  final Profile profile;
   @override
-  Widget build(BuildContext context) {
-    final c = context.c;
-    return Semantics(
-      label: '진행 단계',
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var i = 0; i < _steps.length; i++) ...[
-            if (i > 0) const SizedBox(width: 6),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: i <= step ? c.accent : c.surface2,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${i + 1}. ${_steps[i]}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: tx(context,
-                        size: fsXs,
-                        weight: i <= step ? FontWeight.w600 : FontWeight.w400,
-                        color: i <= step ? c.ink : c.muted),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: C.sky, borderRadius: BorderRadius.circular(kRadius)),
+        child: VStack(gap: 6, children: [
+          T.small('나의 제주 여행 유형 · ${profile.code}', color: C.skyInk),
+          T.h2(profile.name, color: C.skyInk),
+          T.small(profile.desc, color: C.skyInk),
+          T.small('${profile.tags.join(' · ')} · ${profile.companion} · ${profile.transport}', color: C.skyInk),
+        ]),
+      );
 }

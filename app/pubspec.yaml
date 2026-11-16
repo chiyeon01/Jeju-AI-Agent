@@ -14,6 +14,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.6.0
   shared_preferences: ^2.5.6
+  webview_flutter: ^4.14.1
+  web_socket_channel: ^3.0.3
 
 dev_dependencies:
   flutter_test:
@@ -23,10 +25,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  assets:
-    - assets/data/jeju_geo.json
-
-  # 웹과 같은 글꼴을 앱에 넣었습니다 (모두 SIL Open Font License).
+  # 웹과 같은 글꼴 Pretendard (SIL Open Font License)
   fonts:
     - family: Pretendard
       fonts:
@@ -38,12 +37,3 @@ flutter:
           weight: 600
         - asset: assets/fonts/Pretendard-Bold.otf
           weight: 700
-    - family: DoHyeon
-      fonts:
-        - asset: assets/fonts/DoHyeon-Regular.ttf
-    - family: PlexMono
-      fonts:
-        - asset: assets/fonts/IBMPlexMono-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/IBMPlexMono-Medium.ttf
-          weight: 500

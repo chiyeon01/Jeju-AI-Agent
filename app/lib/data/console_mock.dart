@@ -20,22 +20,6 @@ const regionHealth = {
   'jocheon': RegionHealth(65, 820, 93),
 };
 
-class PopularCourse {
-  const PopularCourse(this.from, this.to, this.name, this.count, this.type);
-  final String from, to, name, type;
-  final int count;
-}
-
-const popularCourses = [
-  PopularCourse('aewol', 'hallim', '애월 브런치 → 협재 → 수월봉 노을', 412, '노을 감성 탐험가'),
-  PopularCourse('jocheon', 'gujwa', '함덕 → 세화 카페 → 월정리', 338, '골목 사진 여행자'),
-  PopularCourse('seongsan', 'namwon', '일출봉 → 광치기 → 표선', 291, '노을 감성 모험가'),
-  PopularCourse('jeju-city', 'jocheon', '동문시장 → 사라봉 → 조천 해녀밥상', 254, '해녀밥상 산책가'),
-];
-
-/// 이벤트 종류 → pill 색
-const eventPill = {'방문 인증': 'sea', '평가 등록': 'accent', '코스 선택': '', '리뷰 분류': 'good', '매장 등록': 'warn'};
-
 const eventSamples = [
   ('방문 인증', '협재 해변 · 반경 120m · 성향 HNPS'),
   ('평가 등록', '애월 돌담국수 ★5 · 고객 만족 지수 4.30 → 4.31'),
@@ -84,13 +68,12 @@ const quality = [
   ('중복', 'D1 카드 이용 정보', '중복 0건', 'good'),
 ];
 
-/// (계정, 역할, 권한 범위, 마지막 접속)
+/// GET /admin/users 응답 형식 (role: USER | MERCHANT | ADMIN, status: ACTIVE | PENDING | SUSPENDED)
 const accounts = [
-  ('데이터관리과 관리자', '관리자', '전체 읽기·쓰기·반출 승인', '11-10 09:12'),
-  ('관광정책과 분석가', '분석가', '집계 데이터 읽기', '11-10 08:47'),
-  ('상권 Agent 서비스 계정', '서비스', '지표·리뷰 테이블 읽기', '실시간'),
-  ('관광객 Agent 서비스 계정', '서비스', '장소·코스·선호 행렬 읽기', '실시간'),
-  ('외부 연구기관 (센터 PC)', '열람', '마스킹 집계만 열람, 반출 불가', '11-07 14:30'),
+  {'id': 'a-1', 'name': '데이터관리과', 'email': 'admin@jeju.kr', 'role': 'ADMIN', 'status': 'ACTIVE', 'last': '11-10 09:12'},
+  {'id': 'm-1', 'name': '애월 돌담국수', 'email': 'owner@jeju.kr', 'role': 'MERCHANT', 'status': 'ACTIVE', 'last': '11-10 08:47'},
+  {'id': 'm-2', 'name': '세화 바다 카페', 'email': 'sehwa@jeju.kr', 'role': 'MERCHANT', 'status': 'PENDING', 'last': '-'},
+  {'id': 'u-1', 'name': '김여행', 'email': 'user@jeju.kr', 'role': 'USER', 'status': 'ACTIVE', 'last': '11-09 17:02'},
 ];
 
 /// (시각, 계정, 요청, 대상, 허용 여부)

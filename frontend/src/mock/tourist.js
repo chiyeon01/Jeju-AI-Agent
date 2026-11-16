@@ -2,7 +2,6 @@
 // 관광객 화면용 목업 데이터
 // 실제 서비스에서는 FastAPI 의 성향 분석 / 코스 플래너 Agent 응답으로 대체됩니다.
 // ─────────────────────────────────────────────
-import { project } from './jejuGeo.js';
 
 // 4개 축: 활동성(A 액티비티 ↔ H 힐링), 공간(N 자연·바다 ↔ C 도심·핫플),
 //         취향(F 미식 ↔ P 풍경·사진), 스타일(J 계획형 ↔ S 즉흥형)
@@ -74,10 +73,9 @@ export function scoreAnswers(answers) {
 
 export const COMPANIONS = ['연인', '친구', '가족', '혼자'];
 export const TRANSPORTS = ['렌터카', '대중교통'];
-export const BUDGETS = ['5만원 이하', '5~10만원', '10~20만원', '20만원 이상'];
 
-// 위치는 실제 위도·경도로 적고, 지도 좌표(x, y)로 변환합니다.
-const ll = (lat, lon) => ({ lat, lon, ...project(lat, lon) });
+// 위치는 실제 위도·경도로 적습니다 (카카오맵에 그대로 표시).
+const ll = (lat, lon) => ({ lat, lon });
 export const REGIONS = [
   { id: 'jeju-city', name: '제주시 동지역', ...ll(33.489, 126.51) },
   { id: 'aewol', name: '애월읍', ...ll(33.43, 126.37) },

@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# 개인 키가 들어가는 실행 설정 (env.example.json 을 복사해서 만듭니다)
+env.json

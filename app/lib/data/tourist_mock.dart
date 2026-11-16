@@ -2,10 +2,6 @@
 // 관광객 화면용 목업 데이터 (React 의 src/mock/tourist.js 와 같은 내용)
 // 실제 서비스에서는 FastAPI 의 성향 분석 / 코스 플래너 Agent 응답으로 대체됩니다.
 // ─────────────────────────────────────────────
-import 'dart:ui';
-
-import 'jeju_geo.dart';
-
 // 4개 축: 활동성(A 액티비티 ↔ H 힐링), 공간(N 자연·바다 ↔ C 도심·핫플),
 //         취향(F 미식 ↔ P 풍경·사진), 스타일(J 계획형 ↔ S 즉흥형)
 class TasteAxis {
@@ -58,20 +54,19 @@ const _typeDesc = {
 
 /// 동행·이동수단·예산 등 마지막 단계 입력
 class TripExtra {
-  const TripExtra({this.companion = '연인', this.transport = '렌터카', this.budget = '5~10만원', this.startTime = '15:00', this.hours = 5});
-  final String companion, transport, budget, startTime;
+  const TripExtra({this.companion = '연인', this.transport = '렌터카', this.startTime = '15:00', this.hours = 5});
+  final String companion, transport, startTime;
   final int hours;
 
-  TripExtra copyWith({String? companion, String? transport, String? budget, String? startTime, int? hours}) => TripExtra(
+  TripExtra copyWith({String? companion, String? transport, String? startTime, int? hours}) => TripExtra(
         companion: companion ?? this.companion,
         transport: transport ?? this.transport,
-        budget: budget ?? this.budget,
         startTime: startTime ?? this.startTime,
         hours: hours ?? this.hours,
       );
 
   Map<String, dynamic> toJson() =>
-      {'companion': companion, 'transport': transport, 'budget': budget, 'startTime': startTime, 'hours': hours};
+      {'companion': companion, 'transport': transport, 'startTime': startTime, 'hours': hours};
 }
 
 /// 성향 분석 결과 (유형 + 동행 정보)
@@ -84,7 +79,6 @@ class Profile {
 
   String get companion => extra.companion;
   String get transport => extra.transport;
-  String get budget => extra.budget;
   String get startTime => extra.startTime;
 
   Map<String, dynamic> toJson() => {'code': code, 'name': name, 'desc': desc, 'scores': scores, 'tags': tags, ...extra.toJson()};
@@ -98,7 +92,6 @@ class Profile {
         extra: TripExtra(
           companion: j['companion'] ?? '연인',
           transport: j['transport'] ?? '렌터카',
-          budget: j['budget'] ?? '5~10만원',
           startTime: j['startTime'] ?? '15:00',
           hours: (j['hours'] as num?)?.toInt() ?? 5,
         ),
@@ -141,21 +134,19 @@ Profile scoreAnswers(Map<int, String> answers, TripExtra extra) {
 
 const companions = ['연인', '친구', '가족', '혼자'];
 const transports = ['렌터카', '대중교통'];
-const budgets = ['5만원 이하', '5~10만원', '10~20만원', '20만원 이상'];
 
-/// 지역 (위치는 실제 위도·경도로 적고, 지도 좌표 x, y 로 변환합니다)
+/// 지역 (읍면동 묶음, 위도·경도는 대표 지점)
 class Region {
-  Region(this.id, this.name, this.lat, this.lon) : pos = project(lat, lon);
+  const Region(this.id, this.name, this.lat, this.lon);
   final String id, name;
   final double lat, lon;
-  final Offset pos;
-  double get x => pos.dx;
-  double get y => pos.dy;
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'lat': lat, 'lon': lon, 'x': x, 'y': y};
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'lat': lat, 'lon': lon};
+  factory Region.fromJson(Map<String, dynamic> j) =>
+      Region(j['id'], j['name'], (j['lat'] as num).toDouble(), (j['lon'] as num).toDouble());
 }
 
-final regions = [
+const regions = [
   Region('jeju-city', '제주시 동지역', 33.489, 126.51),
   Region('aewol', '애월읍', 33.43, 126.37),
   Region('hallim', '한림·한경', 33.37, 126.23),
@@ -172,21 +163,26 @@ final regionById = {for (final r in regions) r.id: r};
 
 /// 장소. kind: cafe | spot | sunset | food | indoor
 class Place {
-  Place(this.id, this.name, this.region, this.kind, this.lat, this.lon,
-      {required this.indoor, required this.rating, required this.stay, this.seafood = false, required this.reasons})
-      : pos = project(lat, lon);
+  const Place(this.id, this.name, this.region, this.kind, this.lat, this.lon,
+      {required this.indoor, required this.rating, required this.stay, this.seafood = false, required this.reasons});
   final String id, name, region, kind;
   final double lat, lon;
-  final Offset pos;
   final bool indoor, seafood;
   final double rating;
   final int stay; // 머무는 시간(분)
   final List<(String, String)> reasons; // (데이터 출처, 근거)
-  double get x => pos.dx;
-  double get y => pos.dy;
+
+  factory Place.fromJson(Map<String, dynamic> m) => Place(
+        m['id'], m['name'], m['region'] ?? '', m['kind'] ?? 'spot', (m['lat'] as num).toDouble(), (m['lon'] as num).toDouble(),
+        indoor: m['indoor'] ?? false,
+        rating: (m['rating'] as num?)?.toDouble() ?? 0,
+        stay: (m['stay'] as num?)?.toInt() ?? 0,
+        seafood: m['seafood'] ?? false,
+        reasons: [for (final r in (m['reasons'] as List? ?? const [])) ('${r[0]}', '${r[1]}')],
+      );
 }
 
-final places = [
+const places = [
   Place('p1', '애월 돌담 브런치', 'aewol', 'cafe', 33.4635, 126.3330, indoor: true, rating: 4.6, stay: 60, seafood: false, reasons: [('D1', '이 시간대 2030 커플 카드 이용 비중 상위 15%'), ('D3', '최근 한 달 와이파이 방문자 +18%')]),
   Place('p2', '한담 해안 산책로', 'aewol', 'spot', 33.4608, 126.3107, indoor: false, rating: 4.7, stay: 50, seafood: false, reasons: [('D2', '현재 시간 혼잡도 낮음 (읍면동 유동인구 기준)'), ('D8', 'VISIT JEJU 검색 관심도 상승 중')]),
   Place('p3', '곽지 노을 방파제', 'aewol', 'sunset', 33.4507, 126.3053, indoor: false, rating: 4.8, stay: 45, seafood: false, reasons: [('D7', '오늘 일몰 17:38 · 구름 적음'), ('자체', '노을 감성 유형 평점 4.9')]),

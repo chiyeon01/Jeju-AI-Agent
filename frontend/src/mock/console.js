@@ -15,21 +15,6 @@ export const REGION_HEALTH = {
   jocheon: { score: 65, visits: 820, reviews: 93 },
 };
 
-export const POPULAR_COURSES = [
-  { from: 'aewol', to: 'hallim', name: '애월 브런치 → 협재 → 수월봉 노을', count: 412, type: '노을 감성 탐험가' },
-  { from: 'jocheon', to: 'gujwa', name: '함덕 → 세화 카페 → 월정리', count: 338, type: '골목 사진 여행자' },
-  { from: 'seongsan', to: 'namwon', name: '일출봉 → 광치기 → 표선', count: 291, type: '노을 감성 모험가' },
-  { from: 'jeju-city', to: 'jocheon', name: '동문시장 → 사라봉 → 조천 해녀밥상', count: 254, type: '해녀밥상 산책가' },
-];
-
-export const EVENT_TYPES = [
-  { type: '방문 인증', pill: 'sea' },
-  { type: '평가 등록', pill: 'accent' },
-  { type: '코스 선택', pill: '' },
-  { type: '리뷰 분류', pill: 'good' },
-  { type: '매장 등록', pill: 'warn' },
-];
-
 export const EVENT_SAMPLES = [
   ['방문 인증', '협재 해변 · 반경 120m · 성향 HNPS'],
   ['평가 등록', '애월 돌담국수 ★5 · 고객 만족 지수 4.30 → 4.31'],
@@ -70,12 +55,12 @@ export const QUALITY = [
   { check: '중복', target: 'D1 카드 이용 정보', result: '중복 0건', level: 'good' },
 ];
 
+// GET /admin/users 응답 형식 (role: USER | MERCHANT | ADMIN, status: ACTIVE | PENDING | SUSPENDED)
 export const ACCOUNTS = [
-  { name: '데이터관리과 관리자', role: '관리자', scope: '전체 읽기·쓰기·반출 승인', last: '11-10 09:12' },
-  { name: '관광정책과 분석가', role: '분석가', scope: '집계 데이터 읽기', last: '11-10 08:47' },
-  { name: '상권 Agent 서비스 계정', role: '서비스', scope: '지표·리뷰 테이블 읽기', last: '실시간' },
-  { name: '관광객 Agent 서비스 계정', role: '서비스', scope: '장소·코스·선호 행렬 읽기', last: '실시간' },
-  { name: '외부 연구기관 (센터 PC)', role: '열람', scope: '마스킹 집계만 열람, 반출 불가', last: '11-07 14:30' },
+  { id: 'a-1', name: '데이터관리과', email: 'admin@jeju.kr', role: 'ADMIN', status: 'ACTIVE', last: '11-10 09:12' },
+  { id: 'm-1', name: '애월 돌담국수', email: 'owner@jeju.kr', role: 'MERCHANT', status: 'ACTIVE', last: '11-10 08:47' },
+  { id: 'm-2', name: '세화 바다 카페', email: 'sehwa@jeju.kr', role: 'MERCHANT', status: 'PENDING', last: '-' },
+  { id: 'u-1', name: '김여행', email: 'user@jeju.kr', role: 'USER', status: 'ACTIVE', last: '11-09 17:02' },
 ];
 
 export const ACCESS_LOG = [

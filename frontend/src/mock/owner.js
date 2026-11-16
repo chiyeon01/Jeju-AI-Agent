@@ -32,16 +32,6 @@ export const INDICATORS = [
     desc: '버스 정류장 180m, 한담 산책로까지 6분', basis: '2025-10', spark: [81, 81, 81, 81, 81, 81, 81] },
   { key: 'csat', name: '고객 만족 지수', value: 4.3, unit: '/5', delta: +0.2, good: true, src: '자체',
     desc: '앱 평가 평균 (최근 30일, 리뷰 128건)', basis: '실시간', spark: [4.0, 4.1, 4.1, 4.0, 4.2, 4.1, 4.3] },
-  { key: 'fit', name: '성향 적합도', value: '노을 감성 탐험가', unit: '', delta: null, good: true, src: '자체',
-    desc: '이 매장을 높게 평가한 관광객 성향 1위 (31%)', basis: '실시간', spark: null },
-];
-
-export const FIT_DIST = [
-  { name: '노을 감성 탐험가', pct: 31 },
-  { name: '해녀밥상 여행자', pct: 22 },
-  { name: '골목 사진 산책가', pct: 17 },
-  { name: '핫플 미식 모험가', pct: 12 },
-  { name: '기타 12개 유형', pct: 18 },
 ];
 
 export const WEEKLY_REPORT = {
