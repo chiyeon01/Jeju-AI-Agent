@@ -33,14 +33,7 @@ const questions = [
   Question('space', '사진첩에 가장 많이 남기고 싶은 장면은?', Choice('🌊', '아무도 없는 에메랄드 바다'), Choice('🏮', '감성 가득한 골목 상점가')),
   Question('taste', '여행 코스를 짤 때 가장 먼저 정하는 건?', Choice('🍜', '꼭 먹어야 할 식당'), Choice('📸', '꼭 봐야 할 뷰 포인트')),
   Question('style', '여행 전날 밤 나는?', Choice('🗒️', '시간대별 일정표 완성'), Choice('🎲', '대충 방향만 정하고 잔다')),
-  Question('act', '오름이 눈앞에 있다면?', Choice('⛰️', '정상까지 올라가 본다'), Choice('🌾', '아래 억새밭에서 쉬어 간다')),
   Question('space', '저녁 시간을 보낼 곳은?', Choice('🌅', '노을 지는 포구 방파제'), Choice('🍸', '분위기 좋은 시내 루프탑')),
-  Question('taste', '예산이 남는다면 어디에 쓸까?', Choice('🦞', '제철 해산물 코스'), Choice('🚁', '전망 좋은 숙소·체험')),
-  Question('style', '가려던 식당에 웨이팅이 1시간이라면?', Choice('⏱️', '미리 정한 2순위로 이동'), Choice('🚶', '근처를 걷다 끌리는 곳으로')),
-  Question('act', '비 오는 날의 제주라면?', Choice('🏄', '실내 서핑·카트 체험'), Choice('📚', '북카페에서 빗소리 듣기')),
-  Question('space', '숙소를 고른다면?', Choice('🏡', '돌담 있는 시골 독채'), Choice('🏙️', '맛집 많은 시내 호텔')),
-  Question('taste', '친구에게 자랑하고 싶은 건?', Choice('🥘', '현지인만 아는 맛집'), Choice('🖼️', '인생샷 한 장')),
-  Question('style', '코스 중간 1시간이 비면?', Choice('📍', '근처 추천 장소를 바로 찾는다'), Choice('🌿', '그냥 비워 두고 쉰다')),
 ];
 
 const _adj = {'N-P': '노을 감성', 'N-F': '해녀밥상', 'C-P': '골목 사진', 'C-F': '핫플 미식'};

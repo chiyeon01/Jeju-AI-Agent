@@ -27,7 +27,7 @@ void main() {
     expect(find.text(keepAll('제주잇다')), findsOneWidget);
 
     await _tap(tester, '관광객 계정 · user@jeju.kr');
-    expect(find.text('1 / 12'), findsOneWidget);
+    expect(find.text('1 / 5'), findsOneWidget);
     expect(find.text('관리'), findsNothing); // 관광객에게는 관리 메뉴가 없다
 
     await _tap(tester, '예시 응답으로 건너뛰기');

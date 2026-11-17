@@ -5,7 +5,7 @@ import '../../data/tourist_mock.dart';
 import '../../theme.dart';
 import '../../widgets/ui.dart';
 
-const _sample = {0: 'b', 1: 'a', 2: 'b', 3: 'a', 4: 'a', 5: 'a', 6: 'b', 7: 'b', 8: 'a', 9: 'a', 10: 'b', 11: 'a'};
+const _sample = {0: 'a', 1: 'a', 2: 'b', 3: 'a', 4: 'a'};
 
 class PersonalityTest extends StatefulWidget {
   const PersonalityTest({super.key, required this.onDone});
