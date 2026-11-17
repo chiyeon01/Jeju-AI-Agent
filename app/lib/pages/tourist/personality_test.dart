@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../api/client.dart';
 import '../../data/tourist_mock.dart';
 import '../../theme.dart';
+import '../../widgets/back.dart';
 import '../../widgets/ui.dart';
 
 const _sample = {0: 'a', 1: 'a', 2: 'b', 3: 'a', 4: 'a'};
@@ -41,8 +42,12 @@ class _PersonalityTestState extends State<PersonalityTest> {
     }
   }
 
+  void _prev() => setState(() => _i--); // 왼쪽 위 뒤로가기: 이전 문항
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => BackRegistration(onBack: _i > 0 ? _prev : null, child: _body(context));
+
+  Widget _body(BuildContext context) {
     final total = questions.length;
     if (_i >= total) {
       return VStack(children: [

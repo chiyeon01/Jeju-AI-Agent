@@ -157,13 +157,27 @@ final regionById = {for (final r in regions) r.id: r};
 /// 장소. kind: cafe | spot | sunset | food | indoor
 class Place {
   const Place(this.id, this.name, this.region, this.kind, this.lat, this.lon,
-      {required this.indoor, required this.rating, required this.stay, this.seafood = false, required this.reasons});
+      {required this.indoor, required this.rating, required this.stay, this.seafood = false, required this.reasons,
+      this.crowd, this.popularity, this.hubReasons = 0});
   final String id, name, region, kind;
   final double lat, lon;
   final bool indoor, seafood;
   final double rating;
   final int stay; // 머무는 시간(분)
   final List<(String, String)> reasons; // (데이터 출처, 근거)
+
+  /// 제주데이터허브 등급 (지역 혼잡도: 낮음/보통/높음, 관광지 인기도: 최상위/상위/보통/한산). 없으면 null
+  final String? crowd, popularity;
+
+  /// reasons 맨 앞에서 허브 숫자가 들어간 근거 개수 (GPT 프롬프트에서는 뺍니다)
+  final int hubReasons;
+
+  Place withHub({String? crowd, String? popularity, required List<(String, String)> hubReasons}) {
+    final kept = [for (final r in reasons) if (!hubReasons.any((h) => h.$1 == r.$1)) r];
+    return Place(id, name, region, kind, lat, lon,
+        indoor: indoor, rating: rating, stay: stay, seafood: seafood,
+        reasons: [...hubReasons, ...kept], crowd: crowd, popularity: popularity, hubReasons: hubReasons.length);
+  }
 
   factory Place.fromJson(Map<String, dynamic> m) => Place(
         m['id'], m['name'], m['region'] ?? '', m['kind'] ?? 'spot', (m['lat'] as num).toDouble(), (m['lon'] as num).toDouble(),

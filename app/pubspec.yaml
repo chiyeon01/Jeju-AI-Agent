@@ -16,6 +16,7 @@ dependencies:
   shared_preferences: ^2.5.6
   webview_flutter: ^4.14.1
   web_socket_channel: ^3.0.3
+  geolocator: ^14.1.2
 
 dev_dependencies:
   flutter_test:
@@ -24,6 +25,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # GPT 프롬프트 (웹 frontend/src/prompts 와 같은 파일)
+  assets:
+    - assets/prompts/
 
   # 웹과 같은 글꼴 Pretendard (SIL Open Font License)
   fonts:

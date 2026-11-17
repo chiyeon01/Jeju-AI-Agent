@@ -17,6 +17,7 @@ import '../data/auth_mock.dart';
 import '../data/console_mock.dart' as cm;
 import '../data/owner_mock.dart' as om;
 import '../data/tourist_mock.dart';
+import 'hub.dart';
 
 const bool isMock = AppConfig.useMock;
 Future<void> _wait(int ms) => Future.delayed(Duration(milliseconds: ms));
@@ -134,8 +135,12 @@ Future<AppUser> login(String email, String password) async {
     s = _Session(j['accessToken'], j['refreshToken'], AppUser.fromJson(j['user']));
   } else {
     await _wait(400);
-    final u = demoAccounts.where((a) => a['email'] == email.trim().toLowerCase()).firstOrNull;
-    if (u == null || password != demoPassword) throw ApiError(401, 'INVALID_CREDENTIALS', '이메일 또는 비밀번호가 맞지 않아요.');
+    final em = email.trim().toLowerCase();
+    final local = _mockAccounts[em];
+    final demo = demoAccounts.where((a) => a['email'] == em).firstOrNull;
+    final Json? u = local != null && local.$1 == password ? local.$2 : demo != null && password == demoPassword ? demo : null;
+    if (u == null) throw ApiError(401, 'INVALID_CREDENTIALS', '이메일 또는 비밀번호가 맞지 않아요.');
+    if (u['status'] == 'PENDING') throw ApiError(403, 'ACCOUNT_PENDING', '관리자 승인 후 이용할 수 있어요.');
     s = _Session('mock-access', 'mock-refresh', AppUser.fromJson(u));
   }
   await _save(s);
@@ -146,9 +151,18 @@ Future<AppUser> login(String email, String password) async {
 Future<AppUser> signup(Json form) async {
   if (!isMock) return AppUser.fromJson((await _post('/auth/signup', form) as Json)['user']);
   await _wait(500);
-  if (demoAccounts.any((a) => a['email'] == form['email'])) throw ApiError(409, 'EMAIL_TAKEN', '이미 가입된 이메일이에요.');
-  return AppUser.fromJson({...form, 'id': 'new', 'status': form['role'] == 'MERCHANT' ? 'PENDING' : 'ACTIVE'});
+  final email = '${form['email']}';
+  if (demoAccounts.any((a) => a['email'] == email) || _mockAccounts.containsKey(email)) {
+    throw ApiError(409, 'EMAIL_TAKEN', '이미 가입된 이메일이에요.');
+  }
+  final user = <String, dynamic>{...form, 'id': 'u-${DateTime.now().millisecondsSinceEpoch}', 'status': form['role'] == 'MERCHANT' ? 'PENDING' : 'ACTIVE'}
+    ..remove('password');
+  _mockAccounts[email] = ('${form['password']}', user);
+  return AppUser.fromJson(user);
 }
+
+// 목업 모드에서 회원가입한 계정 (앱을 끄면 사라짐, 백엔드 모드에서는 쓰지 않음)
+final _mockAccounts = <String, (String, Json)>{};
 
 /// POST /auth/logout
 Future<void> logout() async {
@@ -195,16 +209,25 @@ Future<Profile> analyzeProfile(Map<int, String> answers, TripExtra extra) async 
 
 /// 코스의 한 장소 (도착 시각 at, 앞 장소에서 이동 시간 move 분)
 class Stop {
-  const Stop(this.place, this.at, this.move);
+  const Stop(this.place, this.at, this.move, {this.why});
   final Place place;
   final String at;
   final int move;
+
+  /// GPT 가 이 장소를 고른 이유 (있으면 데이터 근거보다 먼저 보여 줍니다)
+  final String? why;
 }
 
 class Course {
-  const Course(this.weather, this.stops);
+  const Course(this.weather, this.stops, {this.summary = '', this.source = 'rule'});
   final String weather;
   final List<Stop> stops;
+
+  /// GPT 가 쓴 코스 소개 (없으면 빈 문자열)
+  final String summary;
+
+  /// 'gpt' | 'rule'
+  final String source;
 }
 
 /// 코스 옵션 (대화로 바뀌는 값)
@@ -220,6 +243,8 @@ class CourseOpts {
         removeCount: removeCount ?? this.removeCount,
       );
 }
+
+final _rand = math.Random();
 
 /// POST /tourist/course
 Future<Course> planCourse({required Profile profile, required Region origin, required CourseOpts opts}) async {
@@ -241,11 +266,10 @@ Future<Course> planCourse({required Profile profile, required Region origin, req
   final rain = opts.weather == 'rain';
   double d(Place p, double lat, double lon) => _km(p.lat, p.lon, lat, lon);
   final near = [...places]..sort((a, b) => d(a, origin.lat, origin.lon).compareTo(d(b, origin.lat, origin.lon)));
+  // 가까운 두 곳 중 하나를 무작위로 골라, 같은 지역이어도 매번 같은 코스가 나오지 않게 합니다
   Place? pick(List<String> kinds, Set<String> used, [bool Function(Place)? pred]) {
-    for (final p in near) {
-      if (kinds.contains(p.kind) && !used.contains(p.id) && (pred == null || pred(p))) return p;
-    }
-    return null;
+    final top = near.where((p) => kinds.contains(p.kind) && !used.contains(p.id) && (pred == null || pred(p))).take(2).toList();
+    return top.isEmpty ? null : top[_rand.nextInt(top.length)];
   }
 
   final order = rain ? [['cafe'], ['indoor'], ['indoor', 'cafe'], ['food']] : [['cafe'], ['spot'], ['sunset'], ['food']];
@@ -308,6 +332,42 @@ Future<ChatResult> chatCourse(String message) async {
   }
   return const ChatResult('시연 화면에서는 "해산물로 바꿔줘", "1곳 줄여줘", "실내로 바꿔줘"를 알아들어요.', null);
 }
+
+// ── 제주데이터허브 (백엔드 /datahub 경유, 키와 원본은 백엔드에만) ──
+Future<HubData>? _hubCache;
+
+/// GET /datahub/crowd + /datahub/sights. 실패한 쪽은 null
+Future<HubData> getHubData() {
+  if (isMock) return Future.value(const HubData());
+  Future<Json?> safe(String p) async {
+    try {
+      return await _get(p) as Json;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  return _hubCache ??= Future.wait([safe('/datahub/crowd'), safe('/datahub/sights')]).then((r) {
+    final h = HubData(crowd: r[0], sights: r[1]);
+    if (h.isEmpty) _hubCache = null; // 실패면 다음에 다시 시도
+    return h;
+  });
+}
+
+/// GET /tourist/ai/status → 서버에 GPT 키와 GPT 중계 API 가 있는지 (없거나 실패하면 false)
+Future<bool> aiStatus() async {
+  if (isMock || !AppConfig.gptRelay) return false;
+  try {
+    return ((await _get('/tourist/ai/status')) as Json)['enabled'] == true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// POST /tourist/ai/json — 앱이 만든 프롬프트를 서버의 GPT 키로 보내고 JSON 을 받습니다
+Future<Map<String, dynamic>> aiJson(String purpose, String system, String user, double temperature) async =>
+    ((await _post('/tourist/ai/json', {'purpose': purpose, 'system': system, 'user': user, 'temperature': temperature})) as Json)['data']
+        as Map<String, dynamic>;
 
 /// POST /tourist/reviews → { accepted }
 Future<int> submitReviews(List<Json> reviews) async {

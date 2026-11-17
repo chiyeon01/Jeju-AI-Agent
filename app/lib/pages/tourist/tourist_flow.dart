@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../api/client.dart';
 import '../../data/tourist_mock.dart';
 import '../../theme.dart';
+import '../../widgets/back.dart';
 import '../../widgets/ui.dart';
 import 'course_step.dart';
 import 'location_step.dart';
@@ -23,6 +24,7 @@ class _TouristFlowState extends State<TouristFlow> {
   Course? _course;
 
   void _go(int n) => setState(() => _step = n);
+  void _back() => _go(_step - 1); // 왼쪽 위 뒤로가기: 이전 단계
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +48,7 @@ class _TouristFlowState extends State<TouristFlow> {
           _go(0);
         }),
     };
-    return PageBody(
+    return BackRegistration(onBack: _step > 0 ? _back : null, child: PageBody(
       key: ValueKey(_step),
       narrow: _step != 2,
       children: [
@@ -61,7 +63,7 @@ class _TouristFlowState extends State<TouristFlow> {
         ),
         body,
       ],
-    );
+    ));
   }
 }
 

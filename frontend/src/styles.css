@@ -167,3 +167,11 @@ table.data tr:last-child td { border-bottom: 0; }
 .live { width: 8px; height: 8px; border-radius: 50%; background: var(--good); display: inline-block; animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .live { animation: none; } }
+
+/* 왼쪽 위 뒤로가기 */
+.back-btn { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--sky-deep); cursor: pointer; }
+.back-btn:hover:not(:disabled) { background: var(--mist); }
+.back-btn:focus-visible { outline: 2px solid var(--sky-deep); outline-offset: 2px; }
+.back-btn:disabled { opacity: .3; cursor: default; }
+.auth { position: relative; }
+.auth-back { position: absolute; top: 12px; left: 12px; }
