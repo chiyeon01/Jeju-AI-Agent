@@ -20,6 +20,9 @@ import 'weather.dart';
 const _candidateLimit = 18;
 final _rand = math.Random();
 
+/// 두 지점 사이 직선거리(km)
+double kmBetween(double lat1, double lon1, double lat2, double lon2) => _km(lat1, lon1, lat2, lon2);
+
 double _km(double lat1, double lon1, double lat2, double lon2) {
   const r = 6371.0, rad = math.pi / 180;
   final dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;

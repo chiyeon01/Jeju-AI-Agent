@@ -2,6 +2,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../api/client.dart';
+import '../../api/history.dart';
 import '../../data/tourist_mock.dart';
 import '../../theme.dart';
 import '../../widgets/back.dart';
@@ -12,43 +13,53 @@ import 'personality_test.dart';
 import 'review_step.dart';
 
 class TouristFlow extends StatefulWidget {
-  const TouristFlow({super.key});
+  const TouristFlow({super.key, required this.userId, this.initialProfile, required this.onExit});
+  final String userId;
+
+  /// 홈에서 "지난 성향으로" 를 누르면 성향 테스트를 건너뛰고 출발 지역부터
+  final Profile? initialProfile;
+
+  /// 기록 홈으로 돌아가기
+  final VoidCallback onExit;
   @override
   State<TouristFlow> createState() => _TouristFlowState();
 }
 
 class _TouristFlowState extends State<TouristFlow> {
-  int _step = 0;
-  Profile? _profile;
+  late int _step = widget.initialProfile != null ? 1 : 0;
+  late Profile? _profile = widget.initialProfile;
   Region? _origin;
   Course? _course;
 
   void _go(int n) => setState(() => _step = n);
-  void _back() => _go(_step - 1); // 왼쪽 위 뒤로가기: 이전 단계
+  // 왼쪽 위 뒤로가기: 이전 단계, 첫 단계면 기록 홈으로
+  void _back() => _step == 0 || (_step == 1 && widget.initialProfile != null) ? widget.onExit() : _go(_step - 1);
 
   @override
   Widget build(BuildContext context) {
     final body = switch (_step) {
       0 => PersonalityTest(onDone: (p) {
           _profile = p;
+          recordProfile(widget.userId, p);
           _go(1);
         }),
       1 => LocationStep(profile: _profile!, onBack: () => _go(0), onDone: (r) {
           _origin = r;
           _go(2);
         }),
-      2 => CourseStep(profile: _profile!, origin: _origin!, onBack: () => _go(1), onDone: (c) {
+      2 => CourseStep(profile: _profile!, origin: _origin!, onBack: () => _go(1), onDone: (c, live) {
           _course = c;
+          recordCourse(widget.userId, course: c, origin: _origin!, profile: _profile!, live: live);
           _go(3);
         }),
-      _ => ReviewStep(profile: _profile!, course: _course!, onRestart: () {
-          _profile = null;
-          _origin = null;
-          _course = null;
-          _go(0);
-        }),
+      _ => ReviewStep(
+          profile: _profile!,
+          course: _course!,
+          onSent: (items) => recordReviews(widget.userId, items),
+          onRestart: widget.onExit,
+        ),
     };
-    return BackRegistration(onBack: _step > 0 ? _back : null, child: PageBody(
+    return BackRegistration(onBack: _back, child: PageBody(
       key: ValueKey(_step),
       narrow: _step != 2,
       children: [

@@ -4,12 +4,14 @@ import 'package:material_ui/material_ui.dart';
 
 import 'api/client.dart' as api;
 import 'pages/login.dart';
+import 'settings.dart';
 import 'shell.dart';
 import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final user = await api.loadSession();
+  await loadSettings(); // 저장해 둔 화면 밝기
   runApp(ItdaApp(initialUser: user));
 }
 
@@ -49,6 +51,7 @@ class _ItdaAppState extends State<ItdaApp> {
         title: '제주잇다',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
+        builder: (context, child) => Dimmer(child: child ?? const SizedBox.shrink()),
         home: ValueListenableBuilder<api.AppUser?>(
           valueListenable: _auth,
           builder: (context, user, _) => user == null

@@ -27,7 +27,7 @@ export default function Shell() {
           )}
           <div className="who">
             {isMock && <span className="pill">목업</span>}
-            <span className="name">{user.name} · {ROLE_LABEL[user.role]}</span>
+            <Link to="/me" className="name-link" title="내 정보·설정">{user.name}<span className="role"> · {ROLE_LABEL[user.role]}</span></Link>
             <button className="btn sm" onClick={logout}>로그아웃</button>
           </div>
         </div>
