@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+storage/*.db
+storage/*.db-journal
+storage/datahub_cache/
+storage/backups/
+storage/.jwt_secret
