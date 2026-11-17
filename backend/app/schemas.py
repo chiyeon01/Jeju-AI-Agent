@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── 공통 ──────────────────────────────────────
@@ -63,7 +63,18 @@ class NearestRegionOut(RegionOut):
 # ── POST /tourist/course ────────────────────────
 class CourseOptions(BaseModel):
     seafood: bool = False
-    removeCount: int = Field(0, ge=0, le=5)
+    removeCount: int = 0
+
+    @field_validator("removeCount", mode="before")
+    @classmethod
+    def _clamp_remove_count(cls, v: Any) -> int:
+        # 프론트가 "1곳 줄여줘"를 누적해서 보내므로 범위를 넘어도 거절하지 않고 0~10으로 맞춤
+        # (코스는 course_service 에서 최소 2곳은 남김)
+        try:
+            n = int(v or 0)
+        except (TypeError, ValueError):
+            return 0
+        return max(0, min(n, 10))
 
 
 class CourseRequest(BaseModel):
