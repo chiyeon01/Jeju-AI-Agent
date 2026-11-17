@@ -5,10 +5,12 @@ import { planCourse, chatCourse, getHubData } from '../../api/client.js';
 import { getLiveWeather, weatherLine } from '../../api/weather.js';
 import { planCourseAI, chatCourseAI } from '../../api/planner.js';
 import { applyHub, hubLine } from '../../api/hub.js';
+import { addToCourse, keepAdded } from '../../api/courseEdit.js';
 
 // GPT 로 짠 코스면 자유로운 요청 예시, 아니면 규칙 기반이 알아듣는 예시
 const SUGGEST_GPT = ['더 여유롭게 바꿔줘', '사진 찍기 좋은 곳 넣어줘', '저녁은 해산물로', '18시에 출발할래'];
-const SUGGEST_RULE = ['저녁은 해산물로 바꿔줘', '1곳 줄여줘', '실내로 바꿔줘'];
+// 백엔드 대화는 해산물·줄이기·실내만 바꾸고, "더 넣어줘"류는 화면에서 직접 처리합니다 (api/courseEdit.js)
+const SUGGEST_RULE = ['1곳 더 넣어줘', '카페 하나 추가해줘', '저녁은 해산물로 바꿔줘', '1곳 줄여줘', '실내로 바꿔줘'];
 
 // 실시간 날씨·허브 값은 5초까지만 기다리고, 늦으면 없이 코스를 먼저 짭니다
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
@@ -25,6 +27,7 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
   const [busy, setBusy] = useState(false);
   const [nonce, setNonce] = useState(0); // "다른 코스 보기"
   const chatRef = useRef(null);
+  const addedRef = useRef([]); // 대화로 추가한 장소 id (백엔드가 코스를 다시 짜도 유지)
 
   // 1) 출발지(현재 위치를 썼다면 그 좌표) 기준 실시간 날씨 + 제주데이터허브(혼잡도·관광지 방문객)
   //    비나 눈이면 실내 코스로 시작합니다. 날씨는 사용자가 고르지 않고 항상 실시간 값을 씁니다
@@ -51,7 +54,7 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
     (async () => {
       const ai = await planCourseAI({ profile, origin, weather: opts.weather, live, hub, startTime });
       const rule = ai ? null : await planCourse({ profile, origin, startTime, ...opts });
-      const c = ai ?? { ...rule, stops: applyHub(rule.stops, hub) };
+      const c = ai ?? { ...rule, stops: applyHub(keepAdded(rule.stops, addedRef.current, startTime), hub) };
       if (!alive) return;
       setCourse(c);
       if (c.summary) {
@@ -81,9 +84,24 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
         if (ai.course) { setCourse(ai.course); if (ai.startTime) setStartTime(ai.startTime); }
         return;
       }
+      // 백엔드가 못 하는 "늘려줘·추가해줘" 는 화면에서 장소를 골라 넣습니다
+      const add = addToCourse(message, course, { startTime, rain: opts.weather === 'rain', hub });
+      if (add) {
+        setMsgs((x) => [...x, { from: 'ai', text: add.reply }]);
+        if (add.course) {
+          setCourse(add.course);
+          addedRef.current = [...addedRef.current, ...add.added];
+        }
+        return;
+      }
       const res = await chatCourse(message);
       setMsgs((x) => [...x, { from: 'ai', text: res.reply }]);
-      if (res.patch) setOpts((o) => ({ ...o, ...res.patch, removeCount: (o.removeCount || 0) + (res.patch.removeCount || 0) }));
+      if (res.patch) {
+        // 줄이기는 대화로 추가한 장소부터 뺍니다
+        let remove = res.patch.removeCount || 0;
+        while (remove > 0 && addedRef.current.length) { addedRef.current = addedRef.current.slice(0, -1); remove -= 1; }
+        setOpts((o) => ({ ...o, ...res.patch, removeCount: (o.removeCount || 0) + remove }));
+      }
     } catch (e) {
       setMsgs((x) => [...x, { from: 'ai', text: `지금은 답하지 못했어요. 잠시 뒤 다시 말해 주세요. (${e.message})` }]);
     } finally {
@@ -114,7 +132,7 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
         {hubNote && <p className="small muted" style={{ margin: 0 }}>{hubNote}</p>}
         <div className="row between" style={{ gap: 8 }}>
           <span className="small muted">{course?.source === 'gpt' ? `AI(GPT) 코스 · 반영: ${['성향', live && '실시간 날씨', (hub?.crowd || hub?.sights) && '데이터허브 혼잡도·방문객'].filter(Boolean).join(', ')}` : `데이터 점수로 짠 코스예요${live ? ' · 실시간 날씨 반영' : ''}`}</span>
-          <button className="btn sm ghost" disabled={!course || busy} onClick={() => { setStartTime(profile.startTime || '15:00'); setNonce((n) => n + 1); }}>다른 코스 보기</button>
+          <button className="btn sm ghost" disabled={!course || busy} onClick={() => { addedRef.current = []; setStartTime(profile.startTime || '15:00'); setNonce((n) => n + 1); }}>다른 코스 보기</button>
         </div>
         <div className="card" aria-busy={!course}>
           {!course ? <p className="muted">코스를 만드는 중…</p> : course.stops.map((s, i) => (
@@ -151,7 +169,7 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
         </div>
         <div className="row between">
           <button className="btn ghost" onClick={onBack}>위치 다시 고르기</button>
-          <button className="btn primary" disabled={!course} onClick={() => onDone(course)}>여행 끝, 평가하기</button>
+          <button className="btn primary" disabled={!course} onClick={() => onDone(course, live)}>여행 끝, 평가하기</button>
         </div>
       </div>
     </section>

@@ -164,6 +164,12 @@ Future<AppUser> signup(Json form) async {
 // 목업 모드에서 회원가입한 계정 (앱을 끄면 사라짐, 백엔드 모드에서는 쓰지 않음)
 final _mockAccounts = <String, (String, Json)>{};
 
+/// GET /auth/me (목업이면 저장된 로그인 정보)
+Future<AppUser?> fetchMe() async {
+  if (isMock) return _session?.user;
+  return AppUser.fromJson(await _get('/auth/me') as Json);
+}
+
 /// POST /auth/logout
 Future<void> logout() async {
   if (!isMock && _session != null) {

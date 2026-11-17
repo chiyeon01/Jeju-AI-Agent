@@ -28,12 +28,16 @@ void _bigScreen(WidgetTester tester) {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('관광객: 로그인 → 성향 테스트 → 지역 → 코스 → 평가', (tester) async {
+  testWidgets('관광객: 로그인 → 기록 홈 → 성향 테스트 → 지역 → 코스 → 평가 → 기록 홈', (tester) async {
     _bigScreen(tester);
     await tester.pumpWidget(const ItdaApp());
     expect(find.text(keepAll('제주잇다')), findsOneWidget);
 
     await _login(tester, 'user@jeju.kr');
+    // 로그인하면 성향 테스트가 아니라 내 기록 홈
+    expect(find.text(keepAll('김여행님, 반가워요')), findsOneWidget);
+    expect(find.text(keepAll('아직 다녀온 코스가 없어요.')), findsOneWidget);
+    await _tap(tester, '첫 여행 코스 만들기');
     expect(find.text('1 / 5'), findsOneWidget);
     expect(find.text('관리'), findsNothing); // 관광객에게는 관리 메뉴가 없다
 
@@ -59,6 +63,30 @@ void main() {
 
     await _tap(tester, '여행 끝, 평가하기');
     expect(find.text(keepAll('오늘 다녀온 곳은 어땠나요?')), findsOneWidget);
+
+    // 건너뛰면 기록 홈으로, 방금 코스와 성향이 기록에 남는다
+    await _tap(tester, '건너뛰기');
+    expect(find.text(keepAll('애월읍 출발 · 4곳')), findsOneWidget);
+    expect(find.text('지난 성향으로 코스 만들기'), findsOneWidget);
+    await _tap(tester, '지난 성향으로 코스 만들기');
+    expect(find.text(keepAll('어디에서 시작할까요?')), findsOneWidget); // 성향 테스트 건너뜀
+    await tester.tap(find.byTooltip('뒤로가기'));
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 800));
+    }
+    expect(find.text(keepAll('김여행님, 반가워요')), findsOneWidget);
+
+    // 이름을 누르면 내 정보·설정, 화면 밝기 조절
+    await tester.tap(find.byKey(const ValueKey('me-button')));
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(find.text(keepAll('내 정보')), findsOneWidget);
+    expect(find.text(keepAll('user@jeju.kr')), findsOneWidget);
+    expect(find.text(keepAll('100%')), findsOneWidget);
+    await tester.drag(find.byType(Slider), const Offset(-2000, 0));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text(keepAll('40%')), findsOneWidget);
+    await _tap(tester, '원래 밝기');
+    expect(find.text(keepAll('100%')), findsOneWidget);
 
     await _tap(tester, '로그아웃');
     expect(find.text('로그인'), findsOneWidget);
@@ -105,7 +133,7 @@ void main() {
     expect(find.text(keepAll('비밀번호는 8자 이상이어야 해요.')), findsOneWidget);
     await tester.enterText(find.byType(TextField).at(2), 'password123');
     await _tap(tester, '가입하기');
-    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text(keepAll('새여행자님, 반가워요')), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

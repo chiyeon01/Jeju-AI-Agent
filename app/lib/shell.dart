@@ -8,7 +8,8 @@ import 'data/auth_mock.dart';
 import 'main.dart';
 import 'pages/console/main_console.dart';
 import 'pages/owner/owner_dashboard.dart';
-import 'pages/tourist/tourist_flow.dart';
+import 'pages/me/my_page.dart';
+import 'pages/tourist/tourist_home.dart';
 import 'theme.dart';
 import 'widgets/back.dart';
 import 'widgets/ui.dart';
@@ -18,13 +19,13 @@ class _Menu {
   final String label;
   final IconData icon;
   final List<String> roles;
-  final Widget Function() build;
+  final Widget Function(api.AppUser user) build;
 }
 
 final _menus = [
-  _Menu('여행 코스', Icons.explore_outlined, ['USER', 'ADMIN'], () => const TouristFlow()),
-  _Menu('내 가게', Icons.storefront_outlined, ['MERCHANT', 'ADMIN'], () => const OwnerDashboard()),
-  _Menu('관리', Icons.dashboard_outlined, ['ADMIN'], () => const MainConsole()),
+  _Menu('여행 코스', Icons.explore_outlined, ['USER', 'ADMIN'], (u) => TouristArea(user: u)),
+  _Menu('내 가게', Icons.storefront_outlined, ['MERCHANT', 'ADMIN'], (_) => const OwnerDashboard()),
+  _Menu('관리', Icons.dashboard_outlined, ['ADMIN'], (_) => const MainConsole()),
 ];
 
 class Shell extends StatefulWidget {
@@ -40,6 +41,7 @@ class _ShellState extends State<Shell> {
   // 첫 화면: 관리자는 '관리', 나머지는 자기 메뉴
   late final int _home = widget.user.role == 'ADMIN' ? _items.length - 1 : 0;
   late int _i = _home;
+  bool _me = false; // 이름을 눌러 내 정보·설정을 연 상태
 
   @override
   void initState() {
@@ -59,6 +61,7 @@ class _ShellState extends State<Shell> {
 
   /// 뒤로가기 순서: 화면 안 단계 → 첫 화면(메뉴) → 없음
   VoidCallback? get _back {
+    if (_me) return () => setState(() => _me = false);
     final inner = backController.current;
     if (inner != null) return inner;
     if (_i != _home) return () => setState(() => _i = _home);
@@ -103,14 +106,32 @@ class _ShellState extends State<Shell> {
                           Text('제주잇다', style: tx(size: 18, weight: FontWeight.w800, color: C.skyDeep)),
                           if (wide && many) ...[
                             const SizedBox(width: 20),
-                            for (var i = 0; i < _items.length; i++) _TopTab(_items[i].label, _i == i, () => setState(() => _i = i)),
+                            for (var i = 0; i < _items.length; i++) _TopTab(_items[i].label, _i == i && !_me, () => setState(() {
+                                  _i = i;
+                                  _me = false;
+                                })),
                           ],
                           const Spacer(),
                           if (api.isMock) ...[const Pill('목업'), const SizedBox(width: 10)],
-                          if (wide) ...[
-                            Text('${widget.user.name} · ${roleLabel[widget.user.role]}', style: tx(size: 13, color: C.muted)),
-                            const SizedBox(width: 10),
-                          ],
+                          // 이름을 누르면 내 정보·설정
+                          Semantics(
+                            button: true,
+                            label: '내 정보·설정',
+                            child: InkWell(
+                              key: const ValueKey('me-button'),
+                              borderRadius: BorderRadius.circular(999),
+                              onTap: () => setState(() => _me = true),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(color: _me ? C.mist : Colors.transparent, borderRadius: BorderRadius.circular(999)),
+                                child: Text.rich(TextSpan(children: [
+                                  TextSpan(text: widget.user.name, style: tx(size: 13, weight: FontWeight.w600, color: _me ? C.skyDeep : C.ink)),
+                                  if (wide) TextSpan(text: ' · ${roleLabel[widget.user.role]}', style: tx(size: 13, color: C.muted)),
+                                ])),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
                           Btn('로그아웃', small: true, onPressed: widget.auth.logout),
                         ]),
                       ),
@@ -121,14 +142,19 @@ class _ShellState extends State<Shell> {
             ),
           ),
         ),
-        body: KeyedSubtree(key: ValueKey(_i), child: _items[_i].build()),
+        body: _me
+            ? MyPage(user: widget.user, onLogout: widget.auth.logout)
+            : KeyedSubtree(key: ValueKey(_i), child: _items[_i].build(widget.user)),
         bottomNavigationBar: !wide && many
             ? NavigationBar(
                 height: 64,
                 backgroundColor: C.surface,
                 indicatorColor: C.mist,
                 selectedIndex: _i,
-                onDestinationSelected: (i) => setState(() => _i = i),
+                onDestinationSelected: (i) => setState(() {
+                  _i = i;
+                  _me = false;
+                }),
                 destinations: [for (final m in _items) NavigationDestination(icon: Icon(m.icon, color: C.muted), selectedIcon: Icon(m.icon, color: C.skyDeep), label: m.label)],
               )
             : null,

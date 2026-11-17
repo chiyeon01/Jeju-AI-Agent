@@ -172,6 +172,9 @@ class Place {
   /// reasons 맨 앞에서 허브 숫자가 들어간 근거 개수 (GPT 프롬프트에서는 뺍니다)
   final int hubReasons;
 
+  Place withReasons(List<(String, String)> r) => Place(id, name, region, kind, lat, lon,
+      indoor: indoor, rating: rating, stay: stay, seafood: seafood, reasons: r, crowd: crowd, popularity: popularity, hubReasons: hubReasons);
+
   Place withHub({String? crowd, String? popularity, required List<(String, String)> hubReasons}) {
     final kept = [for (final r in reasons) if (!hubReasons.any((h) => h.$1 == r.$1)) r];
     return Place(id, name, region, kind, lat, lon,

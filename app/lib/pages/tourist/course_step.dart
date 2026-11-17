@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../api/client.dart';
+import '../../api/course_edit.dart';
 import '../../api/hub.dart';
 import '../../api/planner.dart';
 import '../../api/weather.dart';
@@ -12,13 +13,14 @@ import '../../widgets/ui.dart';
 // GPT 로 짠 코스면 자유로운 요청 예시, 아니면 규칙 기반이 알아듣는 예시
 List<String> _suggestFor(Course? c) => c?.source == 'gpt'
     ? const ['더 여유롭게 바꿔줘', '사진 찍기 좋은 곳 넣어줘', '저녁은 해산물로', '18시에 출발할래']
-    : const ['저녁은 해산물로 바꿔줘', '1곳 줄여줘', '실내로 바꿔줘'];
+    // 백엔드 대화는 해산물·줄이기·실내만 바꾸고, "더 넣어줘"류는 앱에서 직접 처리합니다 (api/course_edit.dart)
+    : const ['1곳 더 넣어줘', '카페 하나 추가해줘', '저녁은 해산물로 바꿔줘', '1곳 줄여줘', '실내로 바꿔줘'];
 
 class CourseStep extends StatefulWidget {
   const CourseStep({super.key, required this.profile, required this.origin, required this.onDone, required this.onBack});
   final Profile profile;
   final Region origin;
-  final ValueChanged<Course> onDone;
+  final void Function(Course course, LiveWeather? live) onDone;
   final VoidCallback onBack;
   @override
   State<CourseStep> createState() => _CourseStepState();
@@ -34,6 +36,7 @@ class _CourseStepState extends State<CourseStep> {
   bool _busy = false;
   LiveWeather? _live;
   HubData? _hub;
+  List<String> _added = const []; // 대화로 추가한 장소 id (백엔드가 코스를 다시 짜도 유지)
 
   @override
   void initState() {
@@ -74,8 +77,9 @@ class _CourseStepState extends State<CourseStep> {
     } else {
       // 규칙 기반 코스에도 허브 근거(방문객·혼잡도)를 붙입니다
       final rule = await planCourse(profile: widget.profile, origin: widget.origin, opts: _opts);
-      final withHub = applyHub([for (final s in rule.stops) s.place], _hub);
-      c = Course(rule.weather, [for (var i = 0; i < rule.stops.length; i++) Stop(withHub[i], rule.stops[i].at, rule.stops[i].move, why: rule.stops[i].why)],
+      final kept = keepAdded(rule.stops, _added, widget.profile.startTime);
+      final withHub = applyHub([for (final s in kept) s.place], _hub);
+      c = Course(rule.weather, [for (var i = 0; i < kept.length; i++) Stop(withHub[i], kept[i].at, kept[i].move, why: kept[i].why)],
           summary: rule.summary, source: rule.source);
     }
     if (!mounted || my != _req) return;
@@ -116,12 +120,30 @@ class _CourseStepState extends State<CourseStep> {
         });
         return;
       }
+      // 백엔드가 못 하는 "늘려줘·추가해줘" 는 앱에서 장소를 골라 넣습니다
+      final add = addToCourse(m, course, startTime: _startTime, rain: _opts.weather == 'rain', hub: _hub);
+      if (add != null) {
+        setState(() {
+          _msgs.add((false, add.reply));
+          if (add.course != null) {
+            _course = add.course;
+            _added = [..._added, ...add.added];
+          }
+        });
+        return;
+      }
       final r = await chatCourse(m);
       if (!mounted) return;
       setState(() => _msgs.add((false, r.reply)));
       final p = r.patch;
       if (p != null) {
-        _opts = _opts.copyWith(weather: p.weather, seafood: p.seafood, removeCount: _opts.removeCount + p.removeCount);
+        // 줄이기는 대화로 추가한 장소부터 뺍니다
+        var remove = p.removeCount;
+        while (remove > 0 && _added.isNotEmpty) {
+          _added = _added.sublist(0, _added.length - 1);
+          remove--;
+        }
+        _opts = _opts.copyWith(weather: p.weather, seafood: p.seafood, removeCount: _opts.removeCount + remove);
         _plan();
       }
     } catch (e) {
@@ -156,7 +178,12 @@ class _CourseStepState extends State<CourseStep> {
                 ? 'AI(GPT) 코스 · 반영: ${['성향', if (_live != null) '실시간 날씨', if (hubOn) '데이터허브 혼잡도·방문객'].join(', ')}'
                 : '데이터 점수로 짠 코스예요${_live != null ? ' · 실시간 날씨 반영' : ''}',
             color: C.muted),
-        right: Btn('다른 코스 보기', small: true, ghost: true, onPressed: _course == null || _busy ? null : _plan),
+        right: Btn('다른 코스 보기', small: true, ghost: true, onPressed: _course == null || _busy
+                ? null
+                : () {
+                    _added = const [];
+                    _plan();
+                  }),
       ),
       AppCard(
         child: _course == null
@@ -177,7 +204,7 @@ class _CourseStepState extends State<CourseStep> {
       ChatPanel(title: '대화로 코스 고치기', messages: _msgs, suggestions: _suggestFor(_course), onSend: _send, busy: _busy || _course == null, hint: '예: 카페는 바다 보이는 곳으로'),
       Between(
         left: Align(alignment: Alignment.centerLeft, child: Btn('위치 다시 고르기', ghost: true, onPressed: widget.onBack)),
-        right: Btn('여행 끝, 평가하기', primary: true, onPressed: _course == null ? null : () => widget.onDone(_course!)),
+        right: Btn('여행 끝, 평가하기', primary: true, onPressed: _course == null ? null : () => widget.onDone(_course!, _live)),
       ),
     ]);
     return Grid(cols: 2, children: [left, right]);
