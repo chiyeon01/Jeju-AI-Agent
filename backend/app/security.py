@@ -158,12 +158,12 @@ DEMO_ACCOUNTS = [
     {"id": "a-1", "email": "admin@jeju.kr", "name": "데이터관리과", "role": "ADMIN", "status": "ACTIVE"},
 ]
 
-# 테스트용 간단 계정 (아이디 = 비밀번호). 로그인 칸에 이메일 대신 아이디를 그대로 넣습니다.
+# 테스트용 간단 계정 (이메일 앞부분 = 비밀번호). 웹 로그인 칸이 이메일 형식만 받아서 @test.kr 을 붙입니다.
 TEST_ACCOUNTS = [
-    ({"id": "t-a123", "email": "a123", "name": "테스트 관광객", "role": "USER", "status": "ACTIVE"}, "a123"),
-    ({"id": "t-b123", "email": "b123", "name": "테스트 상권", "role": "MERCHANT", "status": "ACTIVE",
+    ({"id": "t-a123", "email": "a123@test.kr", "name": "테스트 관광객", "role": "USER", "status": "ACTIVE"}, "a123"),
+    ({"id": "t-b123", "email": "b123@test.kr", "name": "테스트 상권", "role": "MERCHANT", "status": "ACTIVE",
       "store_id": "st-aewol-0142", "store_name": "애월 돌담국수"}, "b123"),
-    ({"id": "t-c123", "email": "c123", "name": "테스트 관리자", "role": "ADMIN", "status": "ACTIVE"}, "c123"),
+    ({"id": "t-c123", "email": "c123@test.kr", "name": "테스트 관리자", "role": "ADMIN", "status": "ACTIVE"}, "c123"),
 ]
 
 
@@ -178,7 +178,12 @@ def seed_demo_accounts() -> None:
     if created:
         logger.info("시연 계정을 만들었어요: %s (비밀번호 %s)", ", ".join(created), DEMO_PASSWORD)
     for acc, password in TEST_ACCOUNTS:
-        if db.get_user_by_email(acc["email"]) or db.get_user(acc["id"]):
+        existing = db.get_user(acc["id"])
+        if existing:
+            if existing["email"] != acc["email"]:  # 예전 아이디(a123 등)로 만든 계정은 이메일만 바꿈
+                db.update_user(acc["id"], {"email": acc["email"]})
+            continue
+        if db.get_user_by_email(acc["email"]):
             continue
         db.insert_user({**acc, "password_hash": hash_password(password)})
         logger.info("테스트 계정을 만들었어요: %s (%s)", acc["email"], acc["role"])
