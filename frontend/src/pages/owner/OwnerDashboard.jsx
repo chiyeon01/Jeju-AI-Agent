@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { LineChart, Stars } from '../../components/Charts.jsx';
 import { getOwnerDashboard, askOwnerAgent, registerAction, OWNER_SUGGESTED_QUESTIONS } from '../../api/client.js';
+import { useAuth } from '../../auth/AuthContext.jsx';
+import MyReviews from './MyReviews.jsx';
 
 function Indicator({ m }) {
   const cls = !m.delta ? '' : (m.delta > 0) === m.good ? 'up' : 'down';
@@ -14,14 +16,17 @@ function Indicator({ m }) {
 }
 
 export default function OwnerDashboard() {
+  const { user } = useAuth();
   const [d, setD] = useState(null);
+  const [dashErr, setDashErr] = useState('');
   const [chat, setChat] = useState([]);
   const [q, setQ] = useState('');
   const [asking, setAsking] = useState(false);
   const [action, setAction] = useState('');
   const [saved, setSaved] = useState([]);
 
-  useEffect(() => { getOwnerDashboard().then(setD); }, []);
+  // 상권 지표 대시보드는 지표가 준비된 매장만 열립니다. 아니어도 내 가게 별점·리뷰는 볼 수 있어요
+  useEffect(() => { getOwnerDashboard().then(setD).catch((e) => setDashErr(e.message)); }, []);
 
   const ask = async (question) => {
     const text = (question ?? q).trim();
@@ -42,7 +47,15 @@ export default function OwnerDashboard() {
     setAction('');
   };
 
-  if (!d) return <main className="page"><p className="muted">불러오는 중…</p></main>;
+  if (!d) {
+    return (
+      <main className="page stack" style={{ gap: 20 }}>
+        <h1>{user?.name || '내 가게'}</h1>
+        <MyReviews />
+        <p className="note">{dashErr ? `상권 지표: ${dashErr}` : '상권 지표를 불러오는 중…'}</p>
+      </main>
+    );
+  }
 
   return (
     <main className="page stack" style={{ gap: 20 }}>
@@ -50,6 +63,8 @@ export default function OwnerDashboard() {
         <span className="label">{d.store.dong} · {d.store.category}</span>
         <h1>{d.store.name}</h1>
       </div>
+
+      <MyReviews />
 
       <section className="grid g2">
         <div className="card stack" style={{ gap: 8 }}>

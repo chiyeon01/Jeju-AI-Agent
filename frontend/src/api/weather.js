@@ -1,11 +1,12 @@
 // ─────────────────────────────────────────────
 // 실시간 날씨. 화면은 getLiveWeather(lat, lon) 하나만 부릅니다.
-//  1) VITE_KMA_SERVICE_KEY 가 있으면 기상청 초단기실황 (공공데이터포털)
-//  2) 키가 없거나 실패하면 Open-Meteo (키 필요 없음)
-//  3) 둘 다 실패하면 null → 화면은 목업 날씨를 씁니다
+//  1) 백엔드 GET /weather/now (서버가 기상청 → Open-Meteo 순으로 가져옴. 브라우저 CORS·차단과 무관)
+//  2) 백엔드가 안 되면 브라우저에서 직접: VITE_KMA_SERVICE_KEY 가 있으면 기상청, 아니면 Open-Meteo
+//  3) 모두 실패하면 null → 화면은 "다시 불러오기"를 보여 줍니다
 // 결과: { code: 'clear'|'rain', label, icon, temp, humidity, wind, rain1h, source, at }
 // ─────────────────────────────────────────────
 import { config } from '../config.js';
+import { serverWeather } from './client.js';
 
 /** 위경도 → 기상청 격자(nx, ny). 기상청 동네예보 격자 변환 공식(LCC) */
 export function toKmaGrid(lat, lon) {
@@ -94,6 +95,9 @@ async function fromOpenMeteo(lat, lon) {
 /** 지금 날씨. 실패하면 null */
 export async function getLiveWeather(lat, lon) {
   if (lat == null || lon == null) return null;
+  if (!config.useMock) {
+    try { return await serverWeather(lat, lon); } catch (e) { console.warn('[weather] 서버 날씨 실패, 브라우저에서 직접 가져옵니다:', e.message); }
+  }
   if (config.kmaServiceKey) {
     try { return await fromKma(lat, lon); } catch (e) { console.warn('[weather] 기상청 실패, Open-Meteo 로 대신합니다:', e.message); }
   }

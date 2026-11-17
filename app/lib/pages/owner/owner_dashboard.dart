@@ -1,10 +1,11 @@
-// 상권 주인: 건강 점수, 주간 추이, AI 제안, 세부 지표, 리뷰, AI 질문, 메뉴·이벤트 등록
+// 상권 주인: 내 가게 별점·리뷰·Agent 분석, 건강 점수, 주간 추이, AI 제안, 세부 지표, 리뷰, AI 질문, 메뉴·이벤트 등록
 import 'package:material_ui/material_ui.dart';
 
 import '../../api/client.dart';
 import '../../theme.dart';
 import '../../widgets/charts.dart';
 import '../../widgets/ui.dart';
+import 'my_reviews.dart';
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -14,6 +15,7 @@ class OwnerDashboard extends StatefulWidget {
 
 class _OwnerDashboardState extends State<OwnerDashboard> {
   Json? _d;
+  String _dashErr = '';
   final List<(bool, String)> _chat = [(false, '가게 지표에 대해 궁금한 점을 물어보세요.')];
   bool _asking = false;
   final _action = TextEditingController();
@@ -22,7 +24,10 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
   @override
   void initState() {
     super.initState();
-    getOwnerDashboard().then((d) => mounted ? setState(() => _d = d) : null);
+    // 상권 지표 대시보드는 지표가 준비된 매장만 열립니다. 아니어도 내 가게 별점·리뷰는 볼 수 있어요
+    getOwnerDashboard().then((d) => mounted ? setState(() => _d = d) : null).catchError((Object e) {
+      if (mounted) setState(() => _dashErr = '$e');
+    });
   }
 
   @override
@@ -57,13 +62,20 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
   @override
   Widget build(BuildContext context) {
     final d = _d;
-    if (d == null) return const PageBody(children: [Loading()]);
+    if (d == null) {
+      return PageBody(children: [
+        const T.h1('내 가게'),
+        const MyReviews(),
+        Note(_dashErr.isEmpty ? '상권 지표를 불러오는 중…' : '상권 지표: $_dashErr'),
+      ]);
+    }
     final store = d['store'] as Json, score = d['score'] as Json, trend = d['trend'] as Json, report = d['report'] as Json;
     final delta = score['delta'] as num;
     final topics = [...(d['topics'] as List).cast<Json>()]..sort((a, b) => (a['pos'] as num).compareTo(b['pos'] as num));
 
     return PageBody(children: [
       VStack(gap: 2, children: [T.label('${store['dong']} · ${store['category']}'), T.h1(store['name'])]),
+      const MyReviews(),
       Grid(cols: 2, children: [
         AppCard(
           child: VStack(gap: 8, children: [

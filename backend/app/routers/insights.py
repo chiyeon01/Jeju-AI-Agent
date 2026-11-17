@@ -1,0 +1,85 @@
+# ─────────────────────────────────────────────
+# 실데이터 인사이트 · 실시간 날씨
+#  GET  /weather/now?lat&lon                 로그인한 누구나 (서버가 대신 날씨를 가져옴)
+#  GET  /admin/insights/regions              지역 점수 0~10 (요청마다 새로 계산)
+#  GET  /admin/reports  · POST /admin/reports  Agent 지역 보고서 목록 · 새로 만들기
+#  GET  /owner/places                        가게 연결용 장소 목록
+#  GET  /owner/place  · PUT /owner/place      내 가게와 연결된 장소
+#  GET  /owner/my-reviews                    내 가게 별점·리뷰·최근 분석
+#  POST /owner/my-reviews/analysis           Agent 리뷰 분석 (저장)
+#  GET  /owner/my-reviews/analysis           지난 분석 목록
+# ─────────────────────────────────────────────
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
+
+from app import db
+from app.security import current_user, require_roles
+from app.services import insight_service as svc
+from app.services.weather_service import live_weather
+
+router = APIRouter(tags=["insights"])
+admin = require_roles("ADMIN")
+merchant = require_roles("MERCHANT", "ADMIN")
+
+
+@router.get("/weather/now")
+def weather_now(lat: float = Query(..., ge=32, le=35), lon: float = Query(..., ge=125, le=128),
+                _: dict = Depends(current_user)) -> dict:
+    return live_weather(lat, lon)
+
+
+@router.get("/admin/insights/regions")
+def region_scores(_: dict = Depends(admin)) -> dict:
+    return svc.region_scores()
+
+
+@router.get("/admin/reports")
+def reports(limit: int = Query(20, ge=1, le=100), _: dict = Depends(admin)) -> list[dict]:
+    return db.list_reports("REGION", None, limit)
+
+
+@router.post("/admin/reports", status_code=201)
+def create_report(user: dict = Depends(admin)) -> dict:
+    return svc.create_region_report(user["id"])
+
+
+class PlaceLink(BaseModel):
+    placeId: str
+
+
+@router.get("/owner/places")
+def places(_: dict = Depends(merchant)) -> list[dict]:
+    return svc.merchant_places()
+
+
+@router.get("/owner/place")
+def my_place(user: dict = Depends(merchant)) -> dict:
+    pid = db.get_store_place(user["id"])
+    p = svc.PLACES_BY_ID.get(pid) if pid else None
+    return {"placeId": pid if p else None,
+            "place": {k: p[k] for k in ("id", "name", "region", "kind")} if p else None}
+
+
+@router.put("/owner/place")
+def link_place(req: PlaceLink, user: dict = Depends(merchant)) -> dict:
+    svc.place_or_404(req.placeId)
+    db.set_store_place(user["id"], req.placeId)
+    return my_place(user)
+
+
+@router.get("/owner/my-reviews")
+def my_reviews(user: dict = Depends(merchant)) -> dict:
+    return svc.my_reviews(db.get_store_place(user["id"]))
+
+
+@router.post("/owner/my-reviews/analysis", status_code=201)
+def analyze(user: dict = Depends(merchant)) -> dict:
+    return svc.analyze_my_reviews(svc.place_or_404(db.get_store_place(user["id"]))["id"], user["id"])
+
+
+@router.get("/owner/my-reviews/analysis")
+def analyses(user: dict = Depends(merchant)) -> list[dict]:
+    pid = svc.place_or_404(db.get_store_place(user["id"]))["id"]
+    return db.list_reports("STORE", pid, 10)

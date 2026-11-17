@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import KakaoMap from '../../components/KakaoMap.jsx';
 import {
   getAdminOverview, getAdminData, getAdminSecurity, updateUser, getAdminBackups, requestBackup, restoreBackup, subscribeEvents,
+  getRegionScores, getRegionReports, createRegionReport,
 } from '../../api/client.js';
+import Markdown from '../../components/Markdown.jsx';
 import { ROLE_LABEL } from '../../mock/auth.js';
 
-const TABS = ['현황', '데이터', '계정·보안', '백업'];
-const scoreColor = (s) => (s >= 70 ? '#2e8b57' : s >= 60 ? '#87CEEB' : '#d0534a');
+const TABS = ['현황', 'Agent 보고서', '데이터', '계정·보안', '백업'];
+// 지역 점수 0~10 (관광객 별점·코스 선택·허브 혼잡도로 실시간 계산)
+const scoreColor = (s) => (s >= 7 ? '#2e8b57' : s >= 5 ? '#87CEEB' : '#d0534a');
+const fmtAt = (iso) => (iso ? iso.slice(5, 16).replace('T', ' ') : '');
 const LEVEL = { ok: 'good', good: 'good', warn: 'warn', err: 'bad', bad: 'bad' };
 
 function useLoad(fn) {
@@ -17,10 +21,25 @@ function useLoad(fn) {
 
 function Overview() {
   const [d] = useLoad(getAdminOverview);
+  const [scores, setScores] = useState(null);
   const [events, setEvents] = useState([]);
-  useEffect(() => subscribeEvents((e) => setEvents((x) => [e, ...x].slice(0, 30))), []);
+  const timer = useRef(null);
+  // 지역 점수: 30초마다, 그리고 코스 선택·평가 이벤트가 오면 (2초 모아서) 다시 계산
+  useEffect(() => {
+    const load = () => getRegionScores().then(setScores).catch(() => {});
+    load();
+    const id = setInterval(load, 30000);
+    const off = subscribeEvents((e) => {
+      setEvents((x) => [e, ...x].slice(0, 30));
+      clearTimeout(timer.current);
+      timer.current = setTimeout(load, 2000);
+    });
+    return () => { clearInterval(id); clearTimeout(timer.current); off?.(); };
+  }, []);
   if (!d) return <p className="muted">불러오는 중…</p>;
   const o = d.overview;
+  const pos = Object.fromEntries(d.health.map((h) => [h.regionId, h]));
+  const rows = scores?.regions ?? [];
   return (
     <div className="stack">
       <div className="grid g4">
@@ -30,14 +49,21 @@ function Overview() {
       </div>
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <div className="card stack">
-          <h3>지역별 상권 점수</h3>
-          <KakaoMap circles={d.health.map((h) => ({ lat: h.lat, lon: h.lon, radius: 4000, color: scoreColor(h.score), text: `${h.name} ${h.score}` }))} />
+          <div className="head" style={{ marginBottom: 0 }}>
+            <h3>지역 점수 (0~10)</h3>
+            <span className="small muted">{scores ? `${fmtAt(scores.updatedAt)} 계산` : '계산 중…'}</span>
+          </div>
+          <p className="small muted" style={{ margin: 0 }}>관광객 별점 만족도 50% · 최근 7일 코스 선택과 평가 30% · 데이터허브 혼잡도 20%{scores?.crowdDate ? ` (${scores.crowdDate})` : ''}</p>
+          <KakaoMap circles={rows.filter((r) => pos[r.regionId]).map((r) => ({ lat: pos[r.regionId].lat, lon: pos[r.regionId].lon, radius: 4000, color: scoreColor(r.score), text: `${r.name} ${r.score}` }))} />
           <div className="table-wrap">
             <table className="data">
-              <thead><tr><th>지역</th><th className="r">점수</th><th className="r">방문</th><th className="r">평가</th></tr></thead>
+              <thead><tr><th>지역</th><th className="r">점수</th><th className="r">만족도</th><th className="r">수요</th><th className="r">쾌적함</th><th className="r">평가</th><th className="r">7일 코스</th></tr></thead>
               <tbody>
-                {[...d.health].sort((a, b) => b.score - a.score).map((h) => (
-                  <tr key={h.regionId}><td>{h.name}</td><td className="r num">{h.score}</td><td className="r num">{h.visits.toLocaleString()}</td><td className="r num">{h.reviews}</td></tr>
+                {rows.map((r) => (
+                  <tr key={r.regionId}>
+                    <td>{r.name}</td><td className="r num"><b>{r.score}</b></td><td className="r num">{r.satisfaction}</td><td className="r num">{r.demand}</td>
+                    <td className="r num">{r.comfort ?? '-'}</td><td className="r num">{r.reviews}{r.avgStars ? ` (★${r.avgStars})` : ''}</td><td className="r num">{r.courses7d}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -50,6 +76,48 @@ function Overview() {
             {events.map((e, i) => <li key={`${e.at}-${i}`}><span className="num muted">{e.at}</span><span><b>{e.type}</b> {e.text}</span></li>)}
           </ul>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function Reports() {
+  const [list, setList] = useState(null);
+  const [open, setOpen] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => { getRegionReports().then((l) => { setList(l); setOpen(l[0] ?? null); }).catch((e) => setErr(e.message)); }, []);
+  const make = async () => {
+    setBusy(true); setErr('');
+    try {
+      const r = await createRegionReport();
+      setList((l) => [r, ...(l ?? [])]);
+      setOpen(r);
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="grid g2" style={{ alignItems: 'start', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)' }}>
+      <div className="card stack">
+        <div className="head" style={{ marginBottom: 0 }}>
+          <h3>저장된 보고서</h3>
+          <button className="btn sm primary" disabled={busy} onClick={make}>{busy ? '작성 중…' : '지금 보고서 만들기'}</button>
+        </div>
+        <p className="small muted" style={{ margin: 0 }}>Agent가 관광객 평가·코스 선택·지역 점수를 읽고 문서를 써서 Main PC에 저장해요. 허브 수치는 등급으로만 넘겨요.</p>
+        {err && <p className="note bad">{err}</p>}
+        {!list ? <p className="muted">불러오는 중…</p> : list.length === 0 ? <p className="muted">아직 보고서가 없어요.</p> : (
+          <ul className="list">
+            {list.map((r) => (
+              <li key={r.id}>
+                <button className={`btn ghost sm${open?.id === r.id ? ' on' : ''}`} style={{ width: '100%', justifyContent: 'space-between' }} onClick={() => setOpen(r)}>
+                  <span>{r.title}</span><span className="pill">{r.source === 'gpt' ? 'GPT' : '규칙'}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="card">
+        {open ? <><h3 style={{ marginBottom: 8 }}>{open.title}</h3><Markdown text={open.body} /></> : <p className="muted">보고서를 고르거나 새로 만들어 주세요.</p>}
       </div>
     </div>
   );
@@ -181,9 +249,10 @@ export default function MainConsole() {
         {TABS.map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? 'on' : ''} onClick={() => setTab(i)}>{t}</button>)}
       </div>
       {tab === 0 && <Overview />}
-      {tab === 1 && <DataTab />}
-      {tab === 2 && <Security />}
-      {tab === 3 && <Backups />}
+      {tab === 1 && <Reports />}
+      {tab === 2 && <DataTab />}
+      {tab === 3 && <Security />}
+      {tab === 4 && <Backups />}
     </main>
   );
 }

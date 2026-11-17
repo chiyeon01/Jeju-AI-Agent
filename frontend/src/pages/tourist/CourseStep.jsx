@@ -35,7 +35,7 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
     let alive = true;
     const p = origin.at ?? origin;
     Promise.all([
-      withTimeout(getLiveWeather(p.lat, p.lon), 5000),
+      withTimeout(getLiveWeather(p.lat, p.lon), 12000),
       withTimeout(getHubData(), 5000),
     ]).then(([w, h]) => {
       if (!alive) return;
@@ -99,6 +99,7 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
       if (res.patch) {
         // 줄이기는 대화로 추가한 장소부터 뺍니다
         let remove = res.patch.removeCount || 0;
+        if (remove < 0) addedRef.current = []; // "처음 코스로 되돌려줘"
         while (remove > 0 && addedRef.current.length) { addedRef.current = addedRef.current.slice(0, -1); remove -= 1; }
         setOpts((o) => ({ ...o, ...res.patch, removeCount: (o.removeCount || 0) + remove }));
       }

@@ -65,6 +65,26 @@ CREATE TABLE IF NOT EXISTS events (
     created_at TEXT NOT NULL
 );
 
+-- 상권자 계정 ↔ 관광객 코스에 나오는 장소 (가게 리뷰를 모아 보기 위함)
+CREATE TABLE IF NOT EXISTS store_places (
+    user_id TEXT PRIMARY KEY,
+    place_id TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+-- Agent 가 만든 문서 (Main PC 지역 보고서, 가게 리뷰 분석)
+CREATE TABLE IF NOT EXISTS reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,              -- REGION | STORE
+    scope TEXT,                      -- STORE 면 place_id
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,              -- 마크다운
+    data TEXT,                       -- 근거 수치 (JSON)
+    source TEXT NOT NULL,            -- gpt | rule
+    user_id TEXT,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS access_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     who TEXT NOT NULL,
@@ -267,3 +287,81 @@ def insert_access_log(who: str, action: str, target: str, ok: bool) -> None:
 def recent_access_logs(limit: int = 50) -> list[dict]:
     with get_conn() as conn:
         return [dict(r) for r in conn.execute("SELECT * FROM access_logs ORDER BY id DESC LIMIT ?", (limit,))]
+
+
+# ── 상권자 가게 ↔ 장소 ─────────────────────────
+def get_store_place(user_id: str) -> str | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT place_id FROM store_places WHERE user_id = ?", (user_id,)).fetchone()
+        return row["place_id"] if row else None
+
+
+def set_store_place(user_id: str, place_id: str) -> None:
+    with get_conn() as conn:
+        conn.execute("INSERT INTO store_places (user_id, place_id, created_at) VALUES (?, ?, ?)"
+                     " ON CONFLICT(user_id) DO UPDATE SET place_id = excluded.place_id", (user_id, place_id, now_iso()))
+
+
+# ── 실데이터 집계 (관광객 평가·코스 선택) ─────────
+def reviews_for_place(place_id: str, limit: int = 50) -> list[dict]:
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT id, stars, text, profile_code, created_at FROM reviews WHERE place_id = ? ORDER BY id DESC LIMIT ?",
+            (place_id, limit))]
+
+
+def review_summary_for_place(place_id: str) -> dict:
+    with get_conn() as conn:
+        row = conn.execute("SELECT COUNT(*) AS n, AVG(stars) AS avg FROM reviews WHERE place_id = ?", (place_id,)).fetchone()
+        dist = {r["stars"]: r["n"] for r in conn.execute(
+            "SELECT stars, COUNT(*) AS n FROM reviews WHERE place_id = ? GROUP BY stars", (place_id,))}
+        types = {r["profile_code"]: r["n"] for r in conn.execute(
+            "SELECT profile_code, COUNT(*) AS n FROM reviews WHERE place_id = ? AND profile_code IS NOT NULL"
+            " GROUP BY profile_code ORDER BY n DESC", (place_id,))}
+    return {"count": row["n"] or 0, "avg": round(row["avg"] or 0.0, 2),
+            "dist": {s: dist.get(s, 0) for s in range(1, 6)}, "byType": types}
+
+
+def review_stats_by_region(since: datetime | None = None) -> dict[str, dict]:
+    q = "SELECT region, COUNT(*) AS n, AVG(stars) AS avg FROM reviews WHERE region IS NOT NULL"
+    args: tuple = ()
+    if since:
+        q += " AND created_at >= ?"
+        args = (since.isoformat(timespec="seconds"),)
+    with get_conn() as conn:
+        return {r["region"]: {"count": r["n"], "avg": round(r["avg"] or 0.0, 2)} for r in conn.execute(q + " GROUP BY region", args)}
+
+
+def review_stats_by_place() -> dict[str, dict]:
+    with get_conn() as conn:
+        return {r["place_id"]: {"count": r["n"], "avg": round(r["avg"] or 0.0, 2)} for r in conn.execute(
+            "SELECT place_id, COUNT(*) AS n, AVG(stars) AS avg FROM reviews GROUP BY place_id")}
+
+
+def event_counts_by_region(type_: str, since: datetime) -> dict[str, int]:
+    with get_conn() as conn:
+        return {r["region"]: r["n"] for r in conn.execute(
+            "SELECT region, COUNT(*) AS n FROM events WHERE type = ? AND region IS NOT NULL AND created_at >= ? GROUP BY region",
+            (type_, since.isoformat(timespec="seconds")))}
+
+
+# ── Agent 문서 ────────────────────────────────
+def insert_report(kind: str, scope: str | None, title: str, body: str, data: str, source: str, user_id: str | None) -> dict:
+    created = now_iso()
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO reports (kind, scope, title, body, data, source, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (kind, scope, title, body, data, source, user_id, created))
+        return {"id": cur.lastrowid, "kind": kind, "scope": scope, "title": title, "body": body,
+                "source": source, "createdAt": created}
+
+
+def list_reports(kind: str, scope: str | None = None, limit: int = 20) -> list[dict]:
+    q, args = "SELECT * FROM reports WHERE kind = ?", [kind]
+    if scope is not None:
+        q += " AND scope = ?"
+        args.append(scope)
+    with get_conn() as conn:
+        rows = conn.execute(q + " ORDER BY id DESC LIMIT ?", (*args, limit)).fetchall()
+    return [{"id": r["id"], "kind": r["kind"], "scope": r["scope"], "title": r["title"], "body": r["body"],
+             "source": r["source"], "createdAt": r["created_at"]} for r in rows]

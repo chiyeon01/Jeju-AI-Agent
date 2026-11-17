@@ -375,6 +375,10 @@ Future<Map<String, dynamic>> aiJson(String purpose, String system, String user, 
     ((await _post('/tourist/ai/json', {'purpose': purpose, 'system': system, 'user': user, 'temperature': temperature})) as Json)['data']
         as Map<String, dynamic>;
 
+/// GET /weather/now — 서버가 대신 가져온 실시간 날씨
+Future<Json> serverWeather(double lat, double lon) async =>
+    await _get('/weather/now?lat=${lat.toStringAsFixed(4)}&lon=${lon.toStringAsFixed(4)}') as Json;
+
 /// POST /tourist/reviews → { accepted }
 Future<int> submitReviews(List<Json> reviews) async {
   if (!isMock) return ((await _post('/tourist/reviews', {'reviews': reviews}) as Json)['accepted'] as num).toInt();
@@ -431,6 +435,53 @@ Future<void> registerAction(String kind, String title) async {
   await _wait(300);
 }
 
+// ── 내 가게 별점·리뷰 (관광객 평가 실데이터) ─────
+const storeKinds = {'food': '식당', 'cafe': '카페', 'indoor': '실내 체험'};
+
+/// 가게 연결용 장소 [{id, name, region, kind}]
+Future<List<Json>> getMerchantPlaces() async {
+  if (!isMock) return [for (final p in await _get('/owner/places') as List) p as Json];
+  return [for (final p in places.where((p) => storeKinds.containsKey(p.kind))) {'id': p.id, 'name': p.name, 'region': p.region, 'kind': p.kind}];
+}
+
+String? _mockLinked;
+
+/// PUT /owner/place {placeId}
+Future<void> linkMyPlace(String placeId) async {
+  if (!isMock) {
+    await _request('PUT', '/owner/place', {'placeId': placeId});
+    return;
+  }
+  _mockLinked = placeId;
+}
+
+/// GET /owner/my-reviews → {place, summary:{count, avg, dist, byType[]}, reviews[], regionScore, analysis}. 연결 전이면 null
+Future<Json?> getMyReviews() async {
+  if (!isMock) {
+    try {
+      return await _get('/owner/my-reviews') as Json;
+    } on ApiError catch (e) {
+      if (e.code == 'PLACE_NOT_LINKED') return null;
+      rethrow;
+    }
+  }
+  await _wait(300);
+  if (_mockLinked == null) return null;
+  final p = places.firstWhere((x) => x.id == _mockLinked);
+  return {
+    'place': {'id': p.id, 'name': p.name, 'region': p.region, 'kind': p.kind},
+    'summary': {'count': 0, 'avg': 0, 'dist': {'1': 0, '2': 0, '3': 0, '4': 0, '5': 0}, 'byType': []},
+    'reviews': [], 'regionScore': null, 'analysis': null,
+  };
+}
+
+/// POST /owner/my-reviews/analysis → 저장된 분석 {id, title, body, source, createdAt}
+Future<Json> analyzeMyReviews() async {
+  if (!isMock) return await _post('/owner/my-reviews/analysis') as Json;
+  await _wait(500);
+  return {'id': 0, 'title': '리뷰 분석', 'body': '## 한 줄 요약\n- 시연 화면이라 실제 리뷰가 없어요.', 'source': 'rule', 'createdAt': DateTime.now().toIso8601String()};
+}
+
 // ── 관리자 ─────────────────────────────────
 /// GET /admin/overview + GET /admin/regions/health
 Future<Json> getAdminOverview() async {
@@ -449,6 +500,28 @@ Future<Json> getAdminOverview() async {
         }
     ],
   };
+}
+
+/// GET /admin/insights/regions → 지역 점수 0~10 (요청할 때마다 새로 계산)
+Future<Json> getRegionScores() async {
+  if (!isMock) return await _get('/admin/insights/regions') as Json;
+  return {
+    'updatedAt': DateTime.now().toIso8601String(), 'crowdDate': null,
+    'regions': [for (final r in regions) {'regionId': r.id, 'name': r.name, 'score': 6.3, 'satisfaction': 6.3, 'demand': 0, 'comfort': null, 'reviews': 0, 'avgStars': null, 'courses7d': 0}],
+  };
+}
+
+/// GET /admin/reports → Agent 가 저장한 지역 보고서
+Future<List<Json>> getRegionReports() async {
+  if (!isMock) return [for (final r in await _get('/admin/reports?limit=20') as List) r as Json];
+  return [];
+}
+
+/// POST /admin/reports → 새 보고서 (GPT, 안 되면 규칙 기반)
+Future<Json> createRegionReport() async {
+  if (!isMock) return await _post('/admin/reports') as Json;
+  await _wait(500);
+  return {'id': DateTime.now().millisecondsSinceEpoch, 'title': '지역 점수 보고서 (시연)', 'body': '## 요약\n- 시연 화면이라 실제 데이터가 없어요.', 'source': 'rule', 'createdAt': DateTime.now().toIso8601String()};
 }
 
 /// GET /admin/sources · /admin/derived · /admin/quality

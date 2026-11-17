@@ -44,12 +44,12 @@ class _CourseStepState extends State<CourseStep> {
     _start();
   }
 
-  // 1) 출발 지역 기준 실시간 날씨 + 제주데이터허브(혼잡도·관광지 방문객), 5초까지만 기다림
+  // 1) 출발 지역 기준 실시간 날씨(12초) + 제주데이터허브(혼잡도·관광지 방문객, 5초)까지만 기다림
   //    날씨는 사용자가 고르지 않고 항상 실시간 값을 씁니다. 비나 눈이면 실내 코스로 시작 → 2) 코스
   Future<void> _start() async {
     setState(() => _ready = false);
-    Future<V?> soft<V>(Future<V> f) => f.timeout(const Duration(seconds: 5)).then<V?>((v) => v).catchError((_) => null);
-    final wf = soft(getLiveWeather(widget.origin.lat, widget.origin.lon));
+    Future<V?> soft<V>(Future<V> f, [int secs = 5]) => f.timeout(Duration(seconds: secs)).then<V?>((v) => v).catchError((_) => null);
+    final wf = soft(getLiveWeather(widget.origin.lat, widget.origin.lon), 12);
     final hf = soft(getHubData());
     final w = await wf;
     final h = await hf;
@@ -139,6 +139,7 @@ class _CourseStepState extends State<CourseStep> {
       if (p != null) {
         // 줄이기는 대화로 추가한 장소부터 뺍니다
         var remove = p.removeCount;
+        if (remove < 0) _added = const []; // "처음 코스로 되돌려줘"
         while (remove > 0 && _added.isNotEmpty) {
           _added = _added.sublist(0, _added.length - 1);
           remove--;

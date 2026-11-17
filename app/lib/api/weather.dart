@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────
 // 실시간 날씨. 화면은 getLiveWeather(lat, lon) 하나만 부릅니다. (React 의 src/api/weather.js 와 같은 구조)
-//  1) KMA_SERVICE_KEY 가 있으면 기상청 초단기실황 (공공데이터포털)
-//  2) 키가 없거나 실패하면 Open-Meteo (키 필요 없음)
-//  3) 둘 다 실패하면 null → 화면은 목업 날씨를 씁니다
+//  1) 백엔드 GET /weather/now (서버가 기상청 → Open-Meteo 순으로 가져옴)
+//  2) 백엔드가 안 되면 앱에서 직접: KMA_SERVICE_KEY 가 있으면 기상청, 아니면 Open-Meteo
+//  3) 모두 실패하면 null → 화면은 "다시 불러오기"를 보여 줍니다
 // ─────────────────────────────────────────────
 import 'dart:convert';
 import 'dart:math' as math;
@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
+import 'client.dart' show isMock, serverWeather;
 
 class LiveWeather {
   const LiveWeather({required this.code, required this.label, required this.icon, required this.temp,
@@ -122,8 +123,21 @@ Future<LiveWeather> _fromOpenMeteo(http.Client c, double lat, double lon) async 
   );
 }
 
-/// 지금 날씨. 실패하면 null. 테스트에서는 client 와 kmaKey 를 넘길 수 있습니다
+LiveWeather liveWeatherFromJson(Map<String, dynamic> j) => LiveWeather(
+      code: j['code'] ?? 'clear', label: j['label'] ?? '', icon: j['icon'] ?? '',
+      temp: (j['temp'] as num?)?.toDouble() ?? 0,
+      humidity: (j['humidity'] as num?)?.toDouble(), wind: (j['wind'] as num?)?.toDouble(),
+      rain1h: (j['rain1h'] as num?)?.toDouble() ?? 0, source: j['source'] ?? '', at: j['at'] ?? '');
+
+/// 지금 날씨. 실패하면 null. 테스트에서는 client 와 kmaKey 를 넘길 수 있습니다 (그때는 백엔드를 건너뜀)
 Future<LiveWeather?> getLiveWeather(double lat, double lon, {http.Client? client, String? kmaKey}) async {
+  if (!isMock && client == null) {
+    try {
+      return liveWeatherFromJson(await serverWeather(lat, lon));
+    } catch (e) {
+      debugPrint('[weather] 서버 날씨 실패, 앱에서 직접 가져옵니다: $e');
+    }
+  }
   final c = client ?? http.Client();
   final key = (kmaKey ?? AppConfig.kmaServiceKey).trim();
   try {

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, Field
 
 from app import db, events
+from app.data.tourist_data import PLACES_BY_ID
 from app.errors import ApiError
 from app.security import (
     create_access_token,
@@ -34,6 +35,7 @@ class SignupRequest(BaseModel):
     role: Literal["USER", "MERCHANT"] = "USER"
     storeName: str | None = Field(None, max_length=80)
     businessNo: str | None = Field(None, max_length=20)
+    placeId: str | None = Field(None, max_length=10)  # 상권 주인: 관광객 평가를 받는 장소와 내 가게 연결
 
 
 class LoginRequest(BaseModel):
@@ -69,6 +71,8 @@ def signup(req: SignupRequest) -> dict:
         "business_no": business_no or None,
     }
     db.insert_user(user)
+    if merchant and req.placeId in PLACES_BY_ID:
+        db.set_store_place(user_id, req.placeId)
     if merchant:
         events.publish(events.STORE, f"{user['store_name']} · 가입 신청 (승인 대기)", user_id=user_id)
     return {"user": public_user(user)}

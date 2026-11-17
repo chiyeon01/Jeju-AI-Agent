@@ -225,6 +225,11 @@ export function getHubData() {
   return hubCache;
 }
 
+/** GET /weather/now — 서버가 대신 가져온 실시간 날씨 */
+export function serverWeather(lat, lon) {
+  return get(`/weather/now?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`);
+}
+
 /** POST /tourist/reviews */
 export async function submitReviews(reviews) {
   if (!isMock) return post('/tourist/reviews', { reviews });
@@ -270,7 +275,67 @@ export async function registerAction(action) {
   return { id: Date.now(), ...action, status: 'MEASURING' };
 }
 
+// ── 내 가게 별점·리뷰 (관광객 평가 실데이터) ─────
+/** GET /owner/places → [{ id, name, region, kind }] 가게 연결용 장소 */
+export async function getMerchantPlaces() {
+  if (!isMock) return get('/owner/places');
+  return PLACES.filter((p) => ['food', 'cafe', 'indoor'].includes(p.kind)).map(({ id, name, region, kind }) => ({ id, name, region, kind }));
+}
+
+/** PUT /owner/place { placeId } */
+export async function linkMyPlace(placeId) {
+  if (!isMock) return request('PUT', '/owner/place', { placeId });
+  mockLinked = placeId;
+  return { placeId };
+}
+
+let mockLinked = null;
+/** GET /owner/my-reviews → { place, summary:{count, avg, dist, byType[]}, reviews[], regionScore, analysis } (연결 전이면 null) */
+export async function getMyReviews() {
+  if (!isMock) {
+    try { return await get('/owner/my-reviews'); } catch (e) { if (e.code === 'PLACE_NOT_LINKED') return null; throw e; }
+  }
+  await wait(300);
+  if (!mockLinked) return null;
+  const p = PLACES.find((x) => x.id === mockLinked);
+  return {
+    place: { id: p.id, name: p.name, region: p.region, kind: p.kind },
+    summary: { count: 0, avg: 0, dist: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, byType: [] },
+    reviews: [], regionScore: null, analysis: null,
+  };
+}
+
+/** POST /owner/my-reviews/analysis → 저장된 분석 { id, title, body, source, createdAt } */
+export async function analyzeMyReviews() {
+  if (!isMock) return post('/owner/my-reviews/analysis');
+  await wait(500);
+  return { id: Date.now(), title: '리뷰 분석', body: '## 한 줄 요약\n- 시연 화면이라 실제 리뷰가 없어요.', source: 'rule', createdAt: new Date().toISOString() };
+}
+
 // ── 관리자 (Main PC 콘솔) ───────────────────
+/** GET /admin/insights/regions → { updatedAt, crowdDate, weights, regions:[{ regionId, name, score, satisfaction, demand, comfort, reviews, avgStars, courses7d, reviews7d, crowd }] } */
+export async function getRegionScores() {
+  if (!isMock) return get('/admin/insights/regions');
+  await wait(200);
+  return {
+    updatedAt: new Date().toISOString(), crowdDate: null, weights: { satisfaction: 0.5, demand: 0.3, comfort: 0.2 },
+    regions: REGIONS.map((r) => ({ regionId: r.id, name: r.name, score: 6.3, satisfaction: 6.3, demand: 0, comfort: null, reviews: 0, avgStars: null, courses7d: 0, reviews7d: 0, crowd: null })),
+  };
+}
+
+/** GET /admin/reports → Agent 가 저장한 지역 보고서 목록 */
+export async function getRegionReports() {
+  if (!isMock) return get('/admin/reports?limit=20');
+  return [];
+}
+
+/** POST /admin/reports → 새 보고서 (GPT, 실패하면 규칙 기반) */
+export async function createRegionReport() {
+  if (!isMock) return post('/admin/reports');
+  await wait(500);
+  return { id: Date.now(), title: '지역 점수 보고서 (시연)', body: '## 요약\n- 시연 화면이라 실제 데이터가 없어요.', source: 'rule', createdAt: new Date().toISOString() };
+}
+
 /** GET /admin/overview + GET /admin/regions/health */
 export async function getAdminOverview() {
   if (!isMock) {

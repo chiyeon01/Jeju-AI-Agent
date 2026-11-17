@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     jeju_data_hub_api_key: str = ""
     jeju_data_hub_base_url: str = "https://open.jejudatahub.net/api/proxy"
 
+    # 기상청 초단기실황 서비스키 (공공데이터포털). 비우면 키 없는 Open-Meteo 로 실시간 날씨를 가져옵니다
+    kma_service_key: str = ""
+
     # 카카오맵(Kakao Local) REST API - 주소 검색, 좌표→행정동 변환
     kakao_rest_api_key: str = ""
 

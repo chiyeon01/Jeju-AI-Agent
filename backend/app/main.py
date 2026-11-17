@@ -19,7 +19,7 @@ from app import events
 from app.config import get_settings
 from app.db import init_db
 from app.errors import install_error_handlers
-from app.routers import admin, auth, datahub, owner, tourist
+from app.routers import admin, auth, datahub, insights, owner, tourist
 from app.routers import map as map_router
 from app.security import seed_demo_accounts
 from app.services.datahub_client import DataHubError
@@ -47,7 +47,7 @@ app.add_middleware(
 install_error_handlers(app)
 
 for r in (auth.router, tourist.regions_router, tourist.router, owner.router, admin.router,
-          map_router.router, datahub.router):
+          map_router.router, datahub.router, insights.router):
     app.include_router(r, prefix=API_PREFIX)
 app.include_router(events.ws_router)
 

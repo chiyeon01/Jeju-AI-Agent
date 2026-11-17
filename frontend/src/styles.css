@@ -200,3 +200,15 @@ table.data tr:last-child td { border-bottom: 0; }
   .stat { padding: 10px 12px; }
   .stat b { font-size: 1.2rem; }
 }
+
+/* Agent 문서 (보고서·리뷰 분석) */
+.md { font-size: .9rem; line-height: 1.6; }
+.md-h { margin: 14px 0 4px; font-size: .95rem; }
+.md-h:first-child { margin-top: 0; }
+.md-p { margin: 4px 0; }
+.md-list { margin: 4px 0; padding-left: 18px; }
+ul.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+ul.list .btn.on { background: var(--mist); }
+.stars-bar { display: grid; grid-template-columns: 28px 1fr 32px; align-items: center; gap: 8px; font-size: .8rem; }
+.stars-bar .track { height: 8px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
+.stars-bar .fill { height: 100%; background: var(--sky-deep); }
