@@ -2,13 +2,33 @@ import { useEffect, useState } from 'react';
 import KakaoMap from '../../components/KakaoMap.jsx';
 import TypeCard from './TypeCard.jsx';
 import RegionArt from '../../components/RegionArt.jsx';
-import { getRegions, nearestRegion, regionFromAddress } from '../../api/client.js';
+import { getRegions, nearestRegion, regionFromAddress, searchPhoto } from '../../api/client.js';
 import { PLACES } from '../../mock/tourist.js';
 
 const SPOT_KIND = { cafe: '카페', spot: '산책', sunset: '노을', food: '식당', indoor: '실내' };
 import { REGION_INFO, fitWith } from '../../regionInfo.js';
 
 // 고른 지역의 특색: 그림 + 해시태그 + 설명 + 갈 만한 곳
+/** 지역 대표 사진 (실제 사진, 네이버 이미지 검색). 불러오기 전·실패하면 그림으로 */
+function RegionPhoto({ region, info }) {
+  const [photo, setPhoto] = useState(null);
+  const [src, setSrc] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    setPhoto(null); setSrc(null);
+    searchPhoto(info.photo).then((p) => { if (alive && p) { setPhoto(p); setSrc(p.image || p.thumbnail); } });
+    return () => { alive = false; };
+  }, [info.photo]);
+  if (!src) return <RegionArt info={info} title={`${region.name} 풍경 그림`} />;
+  return (
+    <figure className="region-photo">
+      <img src={src} alt={`${region.name} 대표 사진 (${info.photo})`} referrerPolicy="no-referrer"
+        onError={() => setSrc(src === photo.image && photo.thumbnail && photo.thumbnail !== src ? photo.thumbnail : null)} />
+      <figcaption>{info.photo} · 네이버 이미지 검색</figcaption>
+    </figure>
+  );
+}
+
 function RegionFeature({ region, profile }) {
   const info = REGION_INFO[region.id];
   if (!info) return null;
@@ -16,7 +36,7 @@ function RegionFeature({ region, profile }) {
   const fit = fitWith(region.id, profile.code);
   return (
     <div key={region.id} className="region-feature" style={{ '--accent': info.accent }}>
-      <RegionArt info={info} title={`${region.name} 풍경 그림`} />
+      <RegionPhoto region={region} info={info} />
       <div className="region-body stack" style={{ gap: 8 }}>
         <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
           <h3 style={{ margin: 0 }}><span aria-hidden="true">{info.emoji}</span> {region.name}</h3>

@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────
 import { config } from '../config.js';
 import { PLACES, REGIONS, WEATHER, scoreAnswers } from '../mock/tourist.js';
-import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '../mock/auth.js';
+import { DEMO_ACCOUNTS, DEMO_PASSWORD, TEST_ACCOUNTS } from '../mock/auth.js';
 import { STORE, SCORE_TREND, INDICATORS, WEEKLY_REPORT, REVIEW_TOPICS, RECENT_REVIEWS, OWNER_QA } from '../mock/owner.js';
 import {
   REGION_HEALTH, EVENT_SAMPLES, SOURCES, DERIVED, QUALITY, ACCOUNTS, ACCESS_LOG, MASKING, BACKUPS, RETENTION,
@@ -76,7 +76,8 @@ export async function login(email, password) {
     const em = email.trim().toLowerCase();
     const local = mockAccounts().find((a) => a.email === em);
     const demo = DEMO_ACCOUNTS.find((a) => a.email === em);
-    const u = local && local.password === password ? local.user : demo && password === DEMO_PASSWORD ? demo : null;
+    const test = TEST_ACCOUNTS.find((a) => a.email === em && password === em.split('@')[0]);
+    const u = local && local.password === password ? local.user : demo && password === DEMO_PASSWORD ? demo : test || null;
     if (!u) throw new ApiError(401, 'INVALID_CREDENTIALS', '이메일 또는 비밀번호가 맞지 않아요.');
     if (u.status === 'PENDING') throw new ApiError(403, 'ACCOUNT_PENDING', '관리자 승인 후 이용할 수 있어요.');
     session = { accessToken: 'mock-access', refreshToken: 'mock-refresh', user: u };
@@ -235,6 +236,15 @@ export function placePhoto(name) {
     photoCache.set(name, get(`/places/photo?q=${encodeURIComponent(placeQuery(name))}`).then((r) => r?.photo ?? null).catch(() => null));
   }
   return photoCache.get(name);
+}
+
+/** 검색어 그대로 대표 사진 (지역 사진 등) → { thumbnail, image } | null */
+export function searchPhoto(query) {
+  if (isMock || !query) return Promise.resolve(null);
+  if (!photoCache.has(`q:${query}`)) {
+    photoCache.set(`q:${query}`, get(`/places/photo?q=${encodeURIComponent(query)}`).then((r) => r?.photo ?? null).catch(() => null));
+  }
+  return photoCache.get(`q:${query}`);
 }
 
 // ── 주소로 출발 지역 찾기 ──────────────────────

@@ -169,7 +169,7 @@ class RegionFeature extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(height: 4, color: info.accent),
-        LayoutBuilder(builder: (context, box) => SizedBox(height: (box.maxWidth * 125 / 320).clamp(0, 200), child: RegionArt(info, label: '${region.name} 풍경 그림'))),
+        LayoutBuilder(builder: (context, box) => SizedBox(height: (box.maxWidth * 125 / 320).clamp(0, 200), child: RegionPhoto(region: region, info: info))),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
           child: VStack(gap: 8, children: [
@@ -192,5 +192,58 @@ class RegionFeature extends StatelessWidget {
         ),
       ]),
     );
+  }
+}
+
+/// 지역 대표 사진 (실제 사진, 네이버 이미지 검색). 불러오기 전·실패하면 그림으로
+class RegionPhoto extends StatefulWidget {
+  const RegionPhoto({super.key, required this.region, required this.info});
+  final Region region;
+  final RegionInfo info;
+  @override
+  State<RegionPhoto> createState() => _RegionPhotoState();
+}
+
+class _RegionPhotoState extends State<RegionPhoto> {
+  List<String> _srcs = const []; // 원본 → 썸네일 순서로 시도
+  int _at = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final q = widget.info.photo;
+    searchPhoto(q).then((p) {
+      if (!mounted || p == null) return;
+      setState(() => _srcs = [for (final k in ['image', 'thumbnail']) if (p[k] is String && (p[k] as String).isNotEmpty) p[k] as String]);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final art = RegionArt(widget.info, label: '${widget.region.name} 풍경 그림');
+    if (_at >= _srcs.length) return art;
+    return Stack(fit: StackFit.expand, children: [
+      Image.network(
+        _srcs[_at],
+        fit: BoxFit.cover,
+        semanticLabel: '${widget.region.name} 대표 사진 (${widget.info.photo})',
+        loadingBuilder: (_, child, progress) => progress == null ? child : art,
+        errorBuilder: (_, _, _) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _at++);
+          });
+          return art;
+        },
+      ),
+      Positioned(
+        right: 8,
+        bottom: 6,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          decoration: BoxDecoration(color: const Color(0x73000000), borderRadius: BorderRadius.circular(6)),
+          child: Text('${widget.info.photo} · 네이버 이미지 검색', style: tx(size: 11, color: C.surface)),
+        ),
+      ),
+    ]);
   }
 }

@@ -370,6 +370,16 @@ Future<String?> placePhoto(String name) {
       .catchError((_) => null);
 }
 
+final _searchCache = <String, Future<Json?>>{};
+
+/// 검색어 그대로 대표 사진 (지역 사진 등) → {thumbnail, image} | null
+Future<Json?> searchPhoto(String query) {
+  if (isMock || query.isEmpty) return Future.value(null);
+  return _searchCache[query] ??= _get('/places/photo?q=${Uri.encodeComponent(query)}')
+      .then<Json?>((r) => (r as Json?)?['photo'] as Json?)
+      .catchError((_) => null);
+}
+
 // ── 주소로 출발 지역 찾기 ──────────────────────
 // 서버 카카오 주소 검색이 안 되면 읍·면·동 이름으로 지역을 찾습니다
 final _addressWords = <(String, RegExp)>[

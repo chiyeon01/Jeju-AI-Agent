@@ -1,7 +1,8 @@
+import { useEffect } from 'react';
 import { NavLink, Link, Outlet } from 'react-router-dom';
 import { useAuth, HOME_BY_ROLE } from '../auth/AuthContext.jsx';
 import { isMock } from '../api/client.js';
-import { ROLE_LABEL } from '../mock/auth.js';
+import { ROLE_LABEL, isTestAdmin } from '../mock/auth.js';
 import BackButton, { BackProvider } from './BackButton.jsx';
 
 // 역할마다 보이는 메뉴가 다릅니다. 관리자는 모든 화면을 볼 수 있습니다.
@@ -14,6 +15,12 @@ const NAV = [
 export default function Shell() {
   const { user, logout } = useAuth();
   const items = NAV.filter((n) => n.roles.includes(user.role));
+  // 테스트 관리자 계정으로 들어오면 글씨·카드·표를 더 크고 굵게 (styles.css 의 .ui-bold)
+  const bold = isTestAdmin(user);
+  useEffect(() => {
+    document.documentElement.classList.toggle('ui-bold', bold);
+    return () => document.documentElement.classList.remove('ui-bold');
+  }, [bold]);
   return (
     <BackProvider>
       <header className="topbar">
