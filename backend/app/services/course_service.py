@@ -23,6 +23,7 @@ from __future__ import annotations
 from app.data.tourist_data import KIND_LABEL, PLACES, REGIONS_BY_ID, WEATHER
 from app.errors import ApiError
 from app.schemas import CourseOut, CourseRequest, CourseStopOut, ProfileOut, WeatherOut
+from app.services.course_session import CoursePrefs
 from app.services.datahub_service import region_crowd
 from app.services.geo import haversine_km, travel_minutes
 
@@ -113,10 +114,14 @@ def _pick_best(
     crowd: dict | None = None,
 ) -> dict | None:
     pool = [p for p in candidates if p["kind"] in kinds and p["id"] not in used]
-    if predicate:
-        filtered = [p for p in pool if predicate(p)]
+    # predicate 는 함수 하나 또는 우선순위 순서의 함수 목록. 전부 만족하는 후보가 없으면
+    # 뒤쪽 조건부터 하나씩 풀어 봅니다.
+    preds = [predicate] if callable(predicate) else [f for f in (predicate or []) if f]
+    for n in range(len(preds), 0, -1):
+        filtered = [p for p in pool if all(f(p) for f in preds[:n])]
         if filtered:
             pool = filtered
+            break
     if not pool:
         return None
 
@@ -127,7 +132,7 @@ def _pick_best(
     return max(pool, key=key)
 
 
-def plan_course(req: CourseRequest) -> CourseOut:
+def plan_course(req: CourseRequest, prefs: CoursePrefs | None = None) -> CourseOut:
     origin = REGIONS_BY_ID.get(req.regionId)
     if origin is None:
         raise ApiError(404, "REGION_NOT_FOUND", f"알 수 없는 지역이에요: {req.regionId}")
@@ -138,16 +143,25 @@ def plan_course(req: CourseRequest) -> CourseOut:
     stops: list[dict] = []
     last_point = (origin["lat"], origin["lon"])
 
+    prefs = prefs or CoursePrefs()
+    candidates = [p for p in PLACES if p["id"] not in prefs.exclude_ids]
+
     for kinds in _category_order(rain):
+        kinds = [k for k in kinds if k not in prefs.exclude_kinds]
+        if not kinds:
+            continue
         predicate = None
         if "food" in kinds and seafood:
             predicate = lambda p: p.get("seafood")
         elif rain:
             predicate = lambda p: p["indoor"]
+        # 대화로 요청한 "바다 보이는 곳"을 가장 먼저 지키고, 없으면 풀어 줌
+        ocean = (lambda p: p.get("ocean") or p["kind"] not in prefs.ocean_kinds) if prefs.ocean_kinds else None
+        predicates = [ocean, predicate]
 
-        place = _pick_best(PLACES, kinds, used, req.profile, rain, last_point, predicate, crowd)
+        place = _pick_best(candidates, kinds, used, req.profile, rain, last_point, predicates, crowd)
         if not place:
-            place = _pick_best(PLACES, kinds, used, req.profile, rain, last_point, None, crowd)
+            place = _pick_best(candidates, kinds, used, req.profile, rain, last_point, None, crowd)
         if place:
             used.add(place["id"])
             stops.append(place)

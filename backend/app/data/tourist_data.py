@@ -155,6 +155,16 @@ PLACES = [
     _place("p30", "안덕 숲 카페", "daejeong", "cafe", 33.27, 126.35, True, 4.4, 50,
            [("D3", "와이파이 방문 증가"), ("D5", "경쟁 밀도 낮음")]),
 ]
+# 바다가 보이는 장소 (대화로 "바다 보이는 카페로" 같은 요청을 받을 때 사용)
+OCEAN_VIEW_IDS = {
+    "p1", "p11", "p16",                      # 카페: 애월 해안·탑동 해변·세화 해변
+    "p4", "p9", "p15",                       # 식당: 하귀 해안·한림항·조천 해안
+    "p2", "p6", "p14", "p17", "p18", "p21", "p24", "p27", "p29",  # 해안 명소
+    "p3", "p8", "p12", "p19", "p26",         # 노을 명소
+}
+for _p in PLACES:
+    _p["ocean"] = _p["id"] in OCEAN_VIEW_IDS
+
 PLACES_BY_ID = {p["id"]: p for p in PLACES}
 
 KIND_LABEL = {"cafe": "카페", "spot": "산책·관광", "sunset": "노을 명소", "food": "저녁 식사", "indoor": "실내 체험"}

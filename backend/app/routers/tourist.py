@@ -21,6 +21,7 @@ from app.schemas import (
     ReviewsRequest,
 )
 from app.security import current_user, require_roles
+from app.services import course_session
 from app.services.chat_service import chat_course as chat_course_service
 from app.services.course_service import plan_course as plan_course_service
 from app.services.geo import haversine_km
@@ -47,15 +48,17 @@ def nearest(lat: float = Query(..., ge=32.9, le=34.1), lon: float = Query(..., g
 
 
 @router.post("/profile", response_model=ProfileOut)
-def analyze_profile(req: ProfileRequest, _: dict = Depends(tourist)) -> ProfileOut:
-    """성향 분석 Agent: 테스트 응답 → 4축 점수 → 16유형."""
+def analyze_profile(req: ProfileRequest, user: dict = Depends(tourist)) -> ProfileOut:
+    """성향 분석 Agent: 테스트 응답 → 4축 점수 → 16유형. 새 여행이므로 대화로 쌓인 코스 선호는 비웁니다."""
+    course_session.reset(user["id"])
     return analyze_profile_service(req)
 
 
 @router.post("/course", response_model=CourseOut)
 def plan_course(req: CourseRequest, user: dict = Depends(tourist)) -> CourseOut:
     """코스 플래너 Agent: 성향·출발 지역·날씨 → 시간표가 있는 추천 코스."""
-    course = plan_course_service(req)
+    course = plan_course_service(req, course_session.get(user["id"]).prefs)
+    course_session.save_plan(user["id"], req, [s.id for s in course.stops])
     region = REGIONS_BY_ID[req.regionId]
     extras = " · ".join(x for x in (req.profile.transport, req.profile.companion) if x)
     events.publish(events.COURSE,
@@ -66,9 +69,10 @@ def plan_course(req: CourseRequest, user: dict = Depends(tourist)) -> CourseOut:
 
 
 @router.post("/course/chat", response_model=ChatOut, response_model_exclude_none=True)
-def chat_course(req: ChatRequest, _: dict = Depends(tourist)) -> ChatOut:
-    """대화로 코스 수정 (예: "저녁은 해산물로 바꿔줘")."""
-    return chat_course_service(req.message)
+def chat_course(req: ChatRequest, user: dict = Depends(tourist)) -> ChatOut:
+    """대화로 코스 수정 (예: "저녁은 해산물로 바꿔줘", "카페는 바다 보이는 곳으로", "함덕 해변 빼줘").
+    patch 로 담을 수 없는 요청은 서버가 사용자별로 기억해 다음 /tourist/course 에 반영합니다."""
+    return chat_course_service(req.message, user["id"])
 
 
 @router.post("/reviews", response_model=ReviewsOut)
