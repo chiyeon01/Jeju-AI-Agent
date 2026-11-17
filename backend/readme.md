@@ -19,6 +19,13 @@ AI 응답(성향 설명, 코스 대화 수정, 상권 Agent 질의)은 **GPT(Ope
 - 로그 확인: `docker compose logs --tail=100 backend`
 - 중지: `docker compose stop backend`
 
+웹(React)도 같은 compose 의 `frontend` 서비스(`jeju-ai-frontend`, nginx)로 띄웁니다.
+배포 파일은 `deploy/frontend/`(Dockerfile, nginx.conf)에 있고, 이 컨테이너가 화면을 제공하면서
+`/api`·`/ws`·`/docs`·`/openapi.json` 은 백엔드로, `/kma` 는 기상청 API 로 넘깁니다.
+Nginx Proxy Manager 의 `jejuai.duckdns.org` 는 `jeju-ai-frontend:80` 으로 연결합니다.
+카카오맵 키 등 웹 빌드 값은 프로젝트 루트 `.env` 에 `VITE_KAKAO_MAP_KEY=...` 처럼 넣고
+`docker compose up -d --build frontend` 로 다시 빌드합니다.
+
 키는 `backend/.env`, 데이터베이스와 캐시는 `backend/storage/`에 보관합니다.
 Docker 시작 시 자동으로 재실행되며, HTTPS 인증서는 Nginx Proxy Manager에서 관리합니다.
 

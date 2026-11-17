@@ -18,6 +18,28 @@ services:
       start_period: 30s
       retries: 3
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../deploy/frontend/Dockerfile
+      additional_contexts:
+        deploy: ./deploy/frontend
+      args:
+        # 값은 프로젝트 루트 .env 에 넣습니다 (예: VITE_KAKAO_MAP_KEY=...)
+        VITE_KAKAO_MAP_KEY: ${VITE_KAKAO_MAP_KEY:-}
+        VITE_KMA_SERVICE_KEY: ${VITE_KMA_SERVICE_KEY:-}
+    container_name: jeju-ai-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 networks:
   proxy:
     external: true
