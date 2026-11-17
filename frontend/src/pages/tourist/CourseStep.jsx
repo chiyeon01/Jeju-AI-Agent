@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import KakaoMap from '../../components/KakaoMap.jsx';
-import { KIND_LABEL } from '../../mock/tourist.js';
-import { planCourse, chatCourse, getHubData } from '../../api/client.js';
+import { planCourse, alternativeCourse, chatCourse, getHubData } from '../../api/client.js';
+import PlaceLink, { PlacePhoto, PlaceMeta } from '../../components/PlaceLink.jsx';
 import { getLiveWeather, weatherLine } from '../../api/weather.js';
 import { planCourseAI, chatCourseAI } from '../../api/planner.js';
-import { applyHub, hubLine } from '../../api/hub.js';
+import { applyHub } from '../../api/hub.js';
 import { addToCourse, keepAdded } from '../../api/courseEdit.js';
 
-// GPT 로 짠 코스면 자유로운 요청 예시, 아니면 규칙 기반이 알아듣는 예시
-const SUGGEST_GPT = ['더 여유롭게 바꿔줘', '사진 찍기 좋은 곳 넣어줘', '저녁은 해산물로', '18시에 출발할래'];
-// 백엔드 대화는 해산물·줄이기·실내만 바꾸고, "더 넣어줘"류는 화면에서 직접 처리합니다 (api/courseEdit.js)
-const SUGGEST_RULE = ['1곳 더 넣어줘', '카페 하나 추가해줘', '저녁은 해산물로 바꿔줘', '1곳 줄여줘', '실내로 바꿔줘'];
+// 대화로 코스 고치기 예시 (백엔드 대화 Agent 가 아이 동반·분위기 좋은 카페·해산물로 알아듣습니다)
+const SUGGEST = ['아기가 놀기 좋은 곳으로 수정해줘.', '분좋카를 원해.', '회를 먹고싶어.'];
 
 // 실시간 날씨·허브 값은 5초까지만 기다리고, 늦으면 없이 코스를 먼저 짭니다
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
@@ -25,9 +23,10 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
   const [msgs, setMsgs] = useState([{ from: 'ai', text: `${origin.name}에서 출발하는 코스를 짜고 있어요.` }]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
-  const [nonce, setNonce] = useState(0); // "다른 코스 보기"
   const chatRef = useRef(null);
   const addedRef = useRef([]); // 대화로 추가한 장소 id (백엔드가 코스를 다시 짜도 유지)
+  const seenRef = useRef(new Set()); // 지금까지 보여 준 장소 ("다른 코스 보기"에서 피함)
+  useEffect(() => { course?.stops.forEach((s) => seenRef.current.add(s.id)); }, [course]);
 
   // 1) 출발지(현재 위치를 썼다면 그 좌표) 기준 실시간 날씨 + 제주데이터허브(혼잡도·관광지 방문객)
   //    비나 눈이면 실내 코스로 시작합니다. 날씨는 사용자가 고르지 않고 항상 실시간 값을 씁니다
@@ -66,7 +65,7 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
     return () => { alive = false; };
     // startTime 은 대화로 바뀔 때 코스와 함께 바뀌므로 다시 짜지 않습니다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opts, profile, origin, nonce]);
+  }, [opts, profile, origin]);
 
   useEffect(() => { chatRef.current?.scrollTo({ top: 99999 }); }, [msgs]);
 
@@ -84,7 +83,24 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
         if (ai.course) { setCourse(ai.course); if (ai.startTime) setStartTime(ai.startTime); }
         return;
       }
-      // 백엔드가 못 하는 "늘려줘·추가해줘" 는 화면에서 장소를 골라 넣습니다
+      // 서버 Agent(GPT)에게 사용자 말을 그대로 보내고, 고친 코스를 받습니다
+      const res = await chatCourse(message, { stopIds: course.stops.map((s) => s.id), history: msgs });
+      if (res.course) {
+        addedRef.current = [];
+        setMsgs((x) => [...x, { from: 'ai', text: res.reply }]);
+        setCourse({ ...course, ...res.course, summary: course.summary, stops: applyHub(res.course.stops, hub) });
+        return;
+      }
+      if (res.patch) {
+        setMsgs((x) => [...x, { from: 'ai', text: res.reply }]);
+        // 줄이기는 대화로 추가한 장소부터 뺍니다
+        let remove = res.patch.removeCount || 0;
+        if (remove < 0) addedRef.current = []; // "처음 코스로 되돌려줘"
+        while (remove > 0 && addedRef.current.length) { addedRef.current = addedRef.current.slice(0, -1); remove -= 1; }
+        setOpts((o) => ({ ...o, ...res.patch, removeCount: (o.removeCount || 0) + remove }));
+        return;
+      }
+      // GPT 가 없는 서버: "늘려줘·미술관 넣어줘" 는 화면에서 장소를 골라 넣습니다
       const add = addToCourse(message, course, { startTime, rain: opts.weather === 'rain', hub });
       if (add) {
         setMsgs((x) => [...x, { from: 'ai', text: add.reply }]);
@@ -94,15 +110,7 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
         }
         return;
       }
-      const res = await chatCourse(message);
       setMsgs((x) => [...x, { from: 'ai', text: res.reply }]);
-      if (res.patch) {
-        // 줄이기는 대화로 추가한 장소부터 뺍니다
-        let remove = res.patch.removeCount || 0;
-        if (remove < 0) addedRef.current = []; // "처음 코스로 되돌려줘"
-        while (remove > 0 && addedRef.current.length) { addedRef.current = addedRef.current.slice(0, -1); remove -= 1; }
-        setOpts((o) => ({ ...o, ...res.patch, removeCount: (o.removeCount || 0) + remove }));
-      }
     } catch (e) {
       setMsgs((x) => [...x, { from: 'ai', text: `지금은 답하지 못했어요. 잠시 뒤 다시 말해 주세요. (${e.message})` }]);
     } finally {
@@ -110,8 +118,23 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
     }
   };
 
+  // 다른 코스 보기: 지금까지 본 장소를 피해서 Agent(GPT)가 새로 고릅니다
+  const another = async () => {
+    if (!course || busy) return;
+    setBusy(true);
+    addedRef.current = [];
+    try {
+      const c = await alternativeCourse({ profile, origin, startTime, ...opts, avoid: [...seenRef.current] });
+      setCourse({ ...c, stops: applyHub(c.stops, hub) });
+      setMsgs((x) => [...x, { from: 'ai', text: `${c.summary ?? '다른 코스를 찾았어요.'} 바꾸고 싶은 점을 말해 주세요.` }]);
+    } catch (e) {
+      setMsgs((x) => [...x, { from: 'ai', text: `다른 코스를 찾지 못했어요. 잠시 뒤 다시 눌러 주세요. (${e.message})` }]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const indoorAsked = opts?.weather === 'rain' && live?.code !== 'rain';
-  const hubNote = hubLine(hub);
 
   return (
     <section className="grid g2" style={{ alignItems: 'start' }}>
@@ -130,10 +153,9 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
           </span>
           {opts && !live && <button className="btn sm ghost" onClick={() => setLiveTry((n) => n + 1)}>다시 불러오기</button>}
         </div>
-        {hubNote && <p className="small muted" style={{ margin: 0 }}>{hubNote}</p>}
         <div className="row between" style={{ gap: 8 }}>
-          <span className="small muted">{course?.source === 'gpt' ? `AI(GPT) 코스 · 반영: ${['성향', live && '실시간 날씨', (hub?.crowd || hub?.sights) && '데이터허브 혼잡도·방문객'].filter(Boolean).join(', ')}` : `데이터 점수로 짠 코스예요${live ? ' · 실시간 날씨 반영' : ''}`}</span>
-          <button className="btn sm ghost" disabled={!course || busy} onClick={() => { addedRef.current = []; setStartTime(profile.startTime || '15:00'); setNonce((n) => n + 1); }}>다른 코스 보기</button>
+          <span className="small muted">{course?.source === 'gpt' ? 'AI가 고른 코스예요' : '내 성향에 맞춰 짠 코스예요'} · 이름을 누르면 네이버 지도로 열려요</span>
+          <button className="btn sm ghost" disabled={!course || busy} onClick={another}>{busy ? '찾는 중…' : '다른 코스 보기'}</button>
         </div>
         <div className="card" aria-busy={!course}>
           {!course ? <p className="muted">코스를 만드는 중…</p> : course.stops.map((s, i) => (
@@ -142,10 +164,10 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
               <div className="stack" style={{ gap: 4 }}>
                 {i > 0 && <span className="small muted">이동 약 {s.move}분</span>}
                 <div className="row" style={{ gap: 8 }}>
-                  <strong>{s.name}</strong>
-                  <span className="pill">{KIND_LABEL[s.kind]}</span>
+                  <PlaceLink name={s.name} />
+                  <PlaceMeta name={s.name} kind={s.kind} label={s.label} addr={s.addr} />
                 </div>
-                {s.reasons.slice(0, 2).map(([src, r]) => <div key={r} className="reason"><b>{src}</b>{r}</div>)}
+                <PlacePhoto name={s.name} />
               </div>
             </div>
           ))}
@@ -161,7 +183,7 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
             {busy && <div className="bubble ai muted">코스를 고치는 중…</div>}
           </div>
           <div className="chips" style={{ marginTop: 10 }}>
-            {(course?.source === 'gpt' ? SUGGEST_GPT : SUGGEST_RULE).map((s) => <button key={s} type="button" className="chip" disabled={busy || !course} onClick={() => send(s)}>{s}</button>)}
+            {SUGGEST.map((s) => <button key={s} type="button" className="chip" disabled={busy || !course} onClick={() => send(s)}>{s}</button>)}
           </div>
           <form className="chat-input" onSubmit={(e) => { e.preventDefault(); send(); }}>
             <input className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="예: 카페는 바다 보이는 곳으로" aria-label="코스 수정 요청" />

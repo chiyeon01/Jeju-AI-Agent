@@ -26,9 +26,11 @@ class CoursePrefs:
     ocean_kinds: set[str] = field(default_factory=set)   # 바다 보이는 곳을 우선할 장소 종류
     exclude_ids: set[str] = field(default_factory=set)   # 빼 달라고 한 장소
     exclude_kinds: set[str] = field(default_factory=set)  # 빼 달라고 한 장소 종류
+    kids: bool = False        # 아이와 가기 좋은 곳 위주
+    mood_cafe: bool = False   # 분위기 좋은 카페
 
     def copy(self) -> "CoursePrefs":
-        return CoursePrefs(set(self.ocean_kinds), set(self.exclude_ids), set(self.exclude_kinds))
+        return CoursePrefs(set(self.ocean_kinds), set(self.exclude_ids), set(self.exclude_kinds), self.kids, self.mood_cafe)
 
 
 @dataclass

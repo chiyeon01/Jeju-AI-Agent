@@ -15,6 +15,7 @@ import json
 import logging
 import math
 import re
+import threading
 from datetime import timedelta
 
 from app import db, events
@@ -144,7 +145,7 @@ def create_region_report(user_id: str | None) -> dict:
         logger.info("지역 보고서 규칙 기반으로 작성: %s", res.error)
     title = f"지역 점수 보고서 · {scores['updatedAt'][:16].replace('T', ' ')}"
     report = db.insert_report("REGION", None, title, body, json.dumps(scores, ensure_ascii=False), source, user_id)
-    events.publish("보고서", f"{title} 저장", user_id=user_id)
+    events.publish(events.REPORT, f"{title} 저장", user_id=user_id)
     return report
 
 
@@ -157,14 +158,15 @@ def place_or_404(place_id: str | None) -> dict:
 
 def my_reviews(place_id: str) -> dict:
     p = place_or_404(place_id)
+    no = db.place_no(p["id"], p["name"], p["region"], p["kind"])
     summary = db.review_summary_for_place(place_id)
     region = next((r for r in region_scores()["regions"] if r["regionId"] == p["region"]), None)
     latest = db.list_reports("STORE", place_id, 1)
     return {
-        "place": {"id": p["id"], "name": p["name"], "region": p["region"], "kind": p["kind"]},
+        "place": {"id": p["id"], "no": no, "name": p["name"], "region": p["region"], "kind": p["kind"]},
         "summary": {**summary, "byType": [{"code": k, "name": type_name(k), "count": v}
                                          for k, v in summary["byType"].items()]},
-        "reviews": [{"id": r["id"], "stars": r["stars"], "text": r["text"], "profile": r["profile_code"],
+        "reviews": [{"id": r["id"], "placeNo": r["place_no"] or no, "stars": r["stars"], "text": r["text"], "profile": r["profile_code"],
                      "createdAt": r["created_at"]} for r in db.reviews_for_place(place_id, 50)],
         "regionScore": region,
         "analysis": latest[0] if latest else None,
@@ -217,6 +219,59 @@ def analyze_my_reviews(place_id: str, user_id: str) -> dict:
 
 
 def merchant_places() -> list[dict]:
-    """가게 연결용 장소 목록 (식당·카페 위주)"""
-    return [{"id": p["id"], "name": p["name"], "region": p["region"], "kind": p["kind"]}
+    """가게 연결용 장소 목록 (식당·카페 위주), 고유 번호 순"""
+    nos = db.place_nos()
+    return [{"id": p["id"], "no": nos.get(p["id"], p["no"]), "name": p["name"], "region": p["region"], "kind": p["kind"]}
             for p in PLACES_BY_ID.values() if p["kind"] in ("food", "cafe", "indoor")]
+
+
+# ── 새 평가가 들어오면 자동 분석 ────────────────
+# 같은 장소에 평가가 몰려 들어오면 AUTO_DELAY 초 동안 모았다가 한 번만 분석합니다.
+AUTO_DELAY = 8.0
+_timers: dict[str, threading.Timer] = {}
+_timer_lock = threading.Lock()
+
+
+def _auto_analyze(place_id: str) -> None:
+    with _timer_lock:
+        _timers.pop(place_id, None)
+    owners = db.owners_of_place(place_id)
+    if not owners:
+        return
+    try:
+        report = analyze_my_reviews(place_id, owners[0])
+    except Exception:  # noqa: BLE001 - 백그라운드 분석이 서버를 멈추지 않게
+        logger.exception("자동 리뷰 분석 실패 (%s)", place_id)
+        return
+    p = PLACES_BY_ID[place_id]
+    events.publish(events.ANALYSIS, f"#{db.place_no(place_id)} {p['name']} 리뷰 분석을 새로 저장했어요",
+                   region=p["region"], place_id=place_id, extra={"reportId": report["id"]})
+
+
+def schedule_store_analysis(place_id: str) -> None:
+    if place_id not in PLACES_BY_ID or not db.owners_of_place(place_id):
+        return
+    with _timer_lock:
+        old = _timers.get(place_id)
+        if old:
+            old.cancel()
+        t = threading.Timer(AUTO_DELAY, _auto_analyze, args=(place_id,))
+        t.daemon = True
+        _timers[place_id] = t
+        t.start()
+
+
+def place_overview() -> list[dict]:
+    """Main PC: 장소(고유 번호)별 평가 수·평균·사장님 연결 여부·최근 분석"""
+    stats = db.review_stats_by_place()
+    nos = db.place_nos()
+    out = []
+    for p in PLACES_BY_ID.values():
+        s = stats.get(p["id"], {"count": 0, "avg": 0.0})
+        last = db.list_reports("STORE", p["id"], 1)
+        out.append({"no": nos.get(p["id"], p["no"]), "id": p["id"], "name": p["name"], "region": p["region"],
+                    "kind": p["kind"], "reviews": s["count"], "avgStars": s["avg"] if s["count"] else None,
+                    "owner": bool(db.owners_of_place(p["id"])),
+                    "lastAnalysis": {"title": last[0]["title"], "createdAt": last[0]["createdAt"]} if last else None})
+    out.sort(key=lambda x: x["no"])
+    return out

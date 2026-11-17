@@ -81,6 +81,7 @@ class _OverviewState extends State<_Overview> {
   final List<Json> _events = [];
   late final void Function() _stop;
   Json? _scores;
+  List<Json>? _places;
   Timer? _every, _soon;
 
   // 지역 점수: 30초마다, 그리고 코스 선택·평가 이벤트가 오면 (2초 모아서) 다시 계산
@@ -88,6 +89,10 @@ class _OverviewState extends State<_Overview> {
     try {
       final s = await getRegionScores();
       if (mounted) setState(() => _scores = s);
+    } catch (_) {}
+    try {
+      final p = await getPlaceOverview();
+      if (mounted) setState(() => _places = p);
     } catch (_) {}
   }
 
@@ -175,6 +180,31 @@ class _OverviewState extends State<_Overview> {
                 ]),
               ),
             ]),
+            AppCard(
+              child: VStack(gap: 12, children: [
+                const T.h3('장소별 평가 (고유 번호)'),
+                const T.muted('평가가 들어오면 사장님 화면에 바로 알리고 Agent가 분석해요', size: 13),
+                if (_places == null) const T.muted('불러오는 중…'),
+                if (_places != null)
+                  SimpleTable(
+                    head: const ['번호', '장소', '평가', '평균', '사장님', '최근 분석'],
+                    flex: const [1, 3, 1, 1, 1, 2],
+                    right: const {0, 2, 3},
+                    rows: [
+                      for (final p in [
+                        ..._places!.where((p) => (p['reviews'] as num? ?? 0) > 0 || p['owner'] == true),
+                        ..._places!.where((p) => (p['reviews'] as num? ?? 0) == 0 && p['owner'] != true),
+                      ].take(30))
+                        [
+                          T.small('#${p['no']}'), T.small('${p['name']}'), T.small('${p['reviews']}'),
+                          T.small(p['avgStars'] != null ? '★${p['avgStars']}' : '-'),
+                          p['owner'] == true ? const Align(alignment: Alignment.centerLeft, child: Pill('연결', tone: 'good')) : const T.muted('-', size: 13),
+                          T.muted(p['lastAnalysis'] == null ? '-' : _fmtAt((p['lastAnalysis'] as Json)['createdAt']), size: 13),
+                        ],
+                    ],
+                  ),
+              ]),
+            ),
           ]);
         },
       );

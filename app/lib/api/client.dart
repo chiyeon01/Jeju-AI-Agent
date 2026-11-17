@@ -252,22 +252,55 @@ class CourseOpts {
 
 final _rand = math.Random();
 
-/// POST /tourist/course
-Future<Course> planCourse({required Profile profile, required Region origin, required CourseOpts opts}) async {
-  if (!isMock) {
-    final j = await _post('/tourist/course', {
+int _toMin(String hhmm) {
+  final hm = hhmm.split(':').map((x) => int.tryParse(x) ?? 0).toList();
+  return hm[0] * 60 + (hm.length > 1 ? hm[1] : 0);
+}
+
+/// 시작·끝 시각 → 백엔드 hours (예전 서버는 endTime 을 모르므로 함께 보냅니다)
+int? tripHours(String startTime, String? endTime) {
+  if (endTime == null) return null;
+  var d = _toMin(endTime) - _toMin(startTime);
+  if (d <= 0) d += 24 * 60;
+  return ((d + 59) ~/ 60).clamp(1, 12);
+}
+
+Json _courseBody(Profile profile, Region origin, CourseOpts opts) => {
       'profile': profile.toJson(),
       'regionId': origin.id,
       'startTime': profile.startTime,
-      'hours': profile.extra.hours,
+      if (profile.endTime != null) 'endTime': profile.endTime,
+      'hours': tripHours(profile.startTime, profile.endTime) ?? profile.extra.hours,
       'weather': opts.weather,
       'options': {'seafood': opts.seafood, 'removeCount': opts.removeCount},
-    }) as Json;
-    return Course(
-      (j['weather'] as Json?)?['code'] ?? opts.weather,
+    };
+
+Course _courseFrom(Json j, String weather) => Course(
+      (j['weather'] as Json?)?['code'] ?? weather,
       [for (final s in j['stops'] as List) Stop(Place.fromJson(s), s['at'] ?? '', (s['move'] as num?)?.toInt() ?? 0)],
+      summary: j['summary'] ?? '',
+      source: j['source'] ?? 'rule',
     );
+
+/// POST /tourist/course
+Future<Course> planCourse({required Profile profile, required Region origin, required CourseOpts opts}) async {
+  if (!isMock) return _courseFrom(await _post('/tourist/course', _courseBody(profile, origin, opts)) as Json, opts.weather);
+  return _mockCourse(profile, origin, opts, const {});
+}
+
+/// POST /tourist/course/alternative — 다른 코스 보기 (Agent 가 지금까지 본 장소를 피해 새로 고름)
+Future<Course> alternativeCourse({required Profile profile, required Region origin, required CourseOpts opts, required Set<String> avoid}) async {
+  final list = avoid.toList();
+  if (!isMock) {
+    return _courseFrom(
+        await _post('/tourist/course/alternative', {..._courseBody(profile, origin, opts), 'avoid': list.sublist(math.max(0, list.length - 60))}) as Json,
+        opts.weather);
   }
+  final c = await _mockCourse(profile, origin, opts, avoid);
+  return Course(c.weather, c.stops, summary: '이전에 본 코스와 다른 장소 위주로 다시 골랐어요.', source: 'rule');
+}
+
+Future<Course> _mockCourse(Profile profile, Region origin, CourseOpts opts, Set<String> skip) async {
   await _wait(600);
   final rain = opts.weather == 'rain';
   double d(Place p, double lat, double lon) => _km(p.lat, p.lon, lat, lon);
@@ -287,22 +320,24 @@ Future<Course> planCourse({required Profile profile, required Region origin, req
         : rain
             ? (p) => p.indoor
             : (p) => true;
-    final p = pick(kinds, used, pred) ?? pick(kinds, used);
+    final p = pick(kinds, used, (x) => !skip.contains(x.id) && pred(x)) ?? pick(kinds, used, (x) => !skip.contains(x.id)) ?? pick(kinds, used);
     if (p != null) {
       used.add(p.id);
       stops.add(p);
     }
   }
   final trimmed = stops.sublist(0, math.min(stops.length, math.max(2, stops.length - opts.removeCount)));
-  final hm = profile.startTime.split(':').map(int.parse).toList();
-  var t = hm[0] * 60 + hm[1];
-  String fmt(int x) => '${(x ~/ 60).toString().padLeft(2, '0')}:${(x % 60).toString().padLeft(2, '0')}';
+  var t = _toMin(profile.startTime);
+  final endRaw = profile.endTime == null ? null : _toMin(profile.endTime!);
+  final end = endRaw == null ? null : endRaw + (endRaw <= t ? 24 * 60 : 0);
+  String fmt(int x) => '${(x ~/ 60 % 24).toString().padLeft(2, '0')}:${(x % 60).toString().padLeft(2, '0')}';
   final out = <Stop>[];
   for (var i = 0; i < trimmed.length; i++) {
     final p = trimmed[i];
     // 직선거리(km) × 1.3(도로 보정) ÷ 평균 35km/h + 주차·도보 4분
     final km = i == 0 ? 0.0 : d(p, trimmed[i - 1].lat, trimmed[i - 1].lon) * 1.3;
     final move = i == 0 ? 0 : math.max(5, (km / 35 * 60 + 4).round());
+    if (end != null && out.length >= 2 && t + move + p.stay > end) break;
     t += move;
     final at = fmt(t);
     t += p.stay;
@@ -311,22 +346,105 @@ Future<Course> planCourse({required Profile profile, required Region origin, req
   return Course(opts.weather, out);
 }
 
-/// 코스 수정 대화 결과. patch 가 있으면 코스 옵션을 바꿉니다.
-class ChatResult {
-  const ChatResult(this.reply, this.patch);
-  final String reply;
-  final ({String? weather, bool? seafood, int removeCount})? patch;
+// ── 장소 링크·대표 사진 ───────────────────────
+/// 장소 정보 (읍·면·동, 종류 이름). 목록에 없으면 null
+Place? placeInfo(String name) => places.where((p) => p.name == name).firstOrNull;
+
+/// 장소 이름 → 네이버 검색어. 목록에 있는 장소면 시·읍면을 붙여 한 곳으로 좁힙니다 (예: 제주시 애월읍 봄날카페)
+String placeQuery(String name) {
+  final p = placeInfo(name);
+  if (p != null && p.addr.isNotEmpty) return '${p.addr.split(' ').take(2).join(' ')} $name';
+  return RegExp('제주|서귀포').hasMatch(name) ? name : '제주 $name';
 }
 
-/// POST /tourist/course/chat → { reply, patch }
-Future<ChatResult> chatCourse(String message) async {
+/// 네이버 지도 검색 링크 (가게·위치 이름으로)
+String naverPlaceUrl(String name) => 'https://map.naver.com/p/search/${Uri.encodeComponent(placeQuery(name))}';
+
+final _photoCache = <String, Future<String?>>{};
+
+/// GET /places/photo?q= → 대표 사진 썸네일 주소 (서버에 네이버 검색 키가 있을 때, 없으면 null)
+Future<String?> placePhoto(String name) {
+  if (isMock || name.isEmpty) return Future.value(null);
+  return _photoCache[name] ??= _get('/places/photo?q=${Uri.encodeComponent(placeQuery(name))}')
+      .then<String?>((r) => ((r as Json?)?['photo'] as Json?)?['thumbnail'] as String?)
+      .catchError((_) => null);
+}
+
+// ── 주소로 출발 지역 찾기 ──────────────────────
+// 서버 카카오 주소 검색이 안 되면 읍·면·동 이름으로 지역을 찾습니다
+final _addressWords = <(String, RegExp)>[
+  ('aewol', RegExp('애월|하귀|곽지|한담|고내|구엄|납읍')),
+  ('hallim', RegExp('한림|한경|협재|금능|고산|판포|저지')),
+  ('daejeong', RegExp('대정|안덕|모슬포|산방|사계|화순|송악|가파|마라')),
+  ('jungmun', RegExp('중문|색달|대포|하원|예래|상예')),
+  ('namwon', RegExp('남원|표선|위미|신례|가시리|세화리.*표선|하례')),
+  ('seongsan', RegExp('성산|우도|오조|고성|신양|섭지|온평|시흥')),
+  ('gujwa', RegExp('구좌|월정|세화|김녕|평대|하도|종달|송당|비자림')),
+  ('jocheon', RegExp('조천|함덕|신촌|북촌|선흘|와흘|교래')),
+  ('seogwipo', RegExp('서귀포|서귀동|서홍|동홍|토평|보목|법환|강정|천지동|정방|효돈|쇠소깍|이중섭')),
+  ('jeju-city', RegExp('제주시|연동|노형|이도|일도|삼도|건입|용담|아라|오라|도두|외도|이호|화북|삼양|봉개|탑동|동문|공항')),
+];
+
+/// 주소 → (지역, 찾은 주소) (못 찾으면 null)
+Future<(Region, String)?> regionFromAddress(String address) async {
+  final q = address.trim();
+  if (q.isEmpty) return null;
   if (!isMock) {
-    final j = await _post('/tourist/course/chat', {'message': message}) as Json;
+    try {
+      final g = await _post('/map/geocode', {'query': q.contains('제주') ? q : '제주 $q'}) as Json?;
+      final items = g?['items'] as List?;
+      final it = items == null || items.isEmpty ? null : items.first as Json;
+      final lat = (it?['lat'] as num?)?.toDouble(), lon = (it?['lon'] as num?)?.toDouble();
+      if (lat != null && lon != null && lat >= 32.9 && lat <= 34.1) {
+        final r = await nearestRegion(lat, lon);
+        return (r, '${it?['roadAddress'] ?? it?['address'] ?? q}');
+      }
+    } catch (_) {
+      // 아래 이름 찾기로
+    }
+  }
+  final key = q.replaceAll(RegExp(r'\s'), '');
+  final hit = _addressWords.where((w) => w.$2.hasMatch(key)).firstOrNull;
+  if (hit == null) return null;
+  final r = (await getRegions()).where((x) => x.id == hit.$1).firstOrNull;
+  return r == null ? null : (r, q);
+}
+
+/// 코스 수정 대화 결과. patch 가 있으면 코스 옵션을 바꿉니다.
+class ChatResult {
+  const ChatResult(this.reply, this.patch, [this.course]);
+  final String reply;
+  final ({String? weather, bool? seafood, int removeCount})? patch;
+
+  /// 서버 Agent(GPT)가 고친 새 코스 (있으면 화면이 그대로 씁니다)
+  final Course? course;
+}
+
+/// POST /tourist/course/chat → { reply, patch, course }
+/// 사용자 말 그대로 + 지금 코스(stopIds) + 앞선 대화를 보내면, 서버의 GPT 가 고친 코스를 돌려줍니다
+Future<ChatResult> chatCourse(String message, {List<String>? stopIds, List<(bool, String)> history = const []}) async {
+  if (!isMock) {
+    final h = history.length > 6 ? history.sublist(history.length - 6) : history;
+    final j = await _post('/tourist/course/chat', {
+      'message': message,
+      'stopIds': ?stopIds,
+      'history': [for (final (me, text) in h) {'from': me ? 'me' : 'ai', 'text': text}],
+    }) as Json;
     final p = j['patch'] as Json?;
-    return ChatResult(j['reply'] ?? '',
-        p == null ? null : (weather: p['weather'] as String?, seafood: p['seafood'] as bool?, removeCount: (p['removeCount'] as num?)?.toInt() ?? 0));
+    final c = j['course'] as Json?;
+    return ChatResult(
+      j['reply'] ?? '',
+      p == null ? null : (weather: p['weather'] as String?, seafood: p['seafood'] as bool?, removeCount: (p['removeCount'] as num?)?.toInt() ?? 0),
+      c == null ? null : _courseFrom(c, 'clear'),
+    );
   }
   await _wait(500);
+  if (RegExp(r'아기|아이(와|랑|들|가|를|\s|$)|애기|유아|어린이|키즈').hasMatch(message)) {
+    return const ChatResult('아이와 함께 가기 좋은 곳 위주로 바꿨어요.', (weather: 'rain', seafood: null, removeCount: 0));
+  }
+  if (RegExp('분좋카|분위기 ?(좋은|있는) ?카페|감성 ?카페').hasMatch(message)) {
+    return const ChatResult('분위기 좋은 카페로 바꿨어요.', (weather: null, seafood: null, removeCount: 0));
+  }
   if (RegExp('해산물|회|바다 음식').hasMatch(message)) {
     return const ChatResult('저녁을 해산물 식당으로 바꿨어요.', (weather: null, seafood: true, removeCount: 0));
   }
@@ -336,7 +454,7 @@ Future<ChatResult> chatCourse(String message) async {
   if (RegExp('비|실내').hasMatch(message)) {
     return const ChatResult('실내 위주 코스로 바꿨어요.', (weather: 'rain', seafood: null, removeCount: 0));
   }
-  return const ChatResult('시연 화면에서는 "해산물로 바꿔줘", "1곳 줄여줘", "실내로 바꿔줘"를 알아들어요.', null);
+  return const ChatResult('시연 화면에서는 "회를 먹고싶어", "아기가 놀기 좋은 곳으로", "분좋카를 원해"를 알아들어요.', null);
 }
 
 // ── 제주데이터허브 (백엔드 /datahub 경유, 키와 원본은 백엔드에만) ──
@@ -441,7 +559,9 @@ const storeKinds = {'food': '식당', 'cafe': '카페', 'indoor': '실내 체험
 /// 가게 연결용 장소 [{id, name, region, kind}]
 Future<List<Json>> getMerchantPlaces() async {
   if (!isMock) return [for (final p in await _get('/owner/places') as List) p as Json];
-  return [for (final p in places.where((p) => storeKinds.containsKey(p.kind))) {'id': p.id, 'name': p.name, 'region': p.region, 'kind': p.kind}];
+  return [
+    for (final p in places.where((p) => storeKinds.containsKey(p.kind))) {'no': places.indexOf(p) + 1, 'id': p.id, 'name': p.name, 'region': p.region, 'kind': p.kind}
+  ];
 }
 
 String? _mockLinked;
@@ -469,7 +589,7 @@ Future<Json?> getMyReviews() async {
   if (_mockLinked == null) return null;
   final p = places.firstWhere((x) => x.id == _mockLinked);
   return {
-    'place': {'id': p.id, 'name': p.name, 'region': p.region, 'kind': p.kind},
+    'place': {'no': places.indexOf(p) + 1, 'id': p.id, 'name': p.name, 'region': p.region, 'kind': p.kind},
     'summary': {'count': 0, 'avg': 0, 'dist': {'1': 0, '2': 0, '3': 0, '4': 0, '5': 0}, 'byType': []},
     'reviews': [], 'regionScore': null, 'analysis': null,
   };
@@ -509,6 +629,15 @@ Future<Json> getRegionScores() async {
     'updatedAt': DateTime.now().toIso8601String(), 'crowdDate': null,
     'regions': [for (final r in regions) {'regionId': r.id, 'name': r.name, 'score': 6.3, 'satisfaction': 6.3, 'demand': 0, 'comfort': null, 'reviews': 0, 'avgStars': null, 'courses7d': 0}],
   };
+}
+
+/// GET /admin/insights/places → 장소 고유 번호별 평가·사장님 연결·최근 분석
+Future<List<Json>> getPlaceOverview() async {
+  if (!isMock) return [for (final p in await _get('/admin/insights/places') as List) p as Json];
+  return [
+    for (var i = 0; i < places.length; i++)
+      {'no': i + 1, 'id': places[i].id, 'name': places[i].name, 'region': places[i].region, 'kind': places[i].kind, 'reviews': 0, 'avgStars': null, 'owner': false, 'lastAnalysis': null}
+  ];
 }
 
 /// GET /admin/reports → Agent 가 저장한 지역 보고서
@@ -591,22 +720,30 @@ Future<String> restoreBackup(String id) async {
   return '$id 스냅샷 복구는 관리자 2인 승인이 필요해요. (목업)';
 }
 
+void Function() _openEvents(void Function(Json e) onEvent) {
+  final token = Uri.encodeComponent(_session?.accessToken ?? '');
+  final ch = WebSocketChannel.connect(Uri.parse('${AppConfig.eventStreamUrl}?token=$token'));
+  final sub = ch.stream.listen((m) {
+    try {
+      onEvent(jsonDecode(m as String) as Json);
+    } catch (_) {}
+  }, onError: (_) {});
+  return () {
+    sub.cancel();
+    ch.sink.close();
+  };
+}
+
+/// 상권 주인: 내 가게(연결한 장소)에 새 평가·Agent 분석이 생기면 실시간으로 받습니다
+void Function() subscribeMyStore(void Function(Json e) onEvent) {
+  if (!isMock && AppConfig.eventStreamUrl.isNotEmpty) return _openEvents(onEvent);
+  return () {};
+}
+
 /// 실시간 이벤트 구독. WS {EVENT_STREAM_URL}?token=... 로 { type, text, at } 를 받습니다.
 /// 돌려준 함수를 부르면 구독을 끊습니다.
 void Function() subscribeEvents(void Function(Json e) onEvent) {
-  if (!isMock && AppConfig.eventStreamUrl.isNotEmpty) {
-    final token = Uri.encodeComponent(_session?.accessToken ?? '');
-    final ch = WebSocketChannel.connect(Uri.parse('${AppConfig.eventStreamUrl}?token=$token'));
-    final sub = ch.stream.listen((m) {
-      try {
-        onEvent(jsonDecode(m as String) as Json);
-      } catch (_) {}
-    }, onError: (_) {});
-    return () {
-      sub.cancel();
-      ch.sink.close();
-    };
-  }
+  if (!isMock && AppConfig.eventStreamUrl.isNotEmpty) return _openEvents(onEvent);
   final rnd = math.Random();
   String pad(int n) => n.toString().padLeft(2, '0');
   final t = Timer.periodic(const Duration(milliseconds: 2600), (_) {

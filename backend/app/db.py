@@ -65,6 +65,16 @@ CREATE TABLE IF NOT EXISTS events (
     created_at TEXT NOT NULL
 );
 
+-- 장소 고유 번호: 1부터 차례대로, 중복 없음 (key 는 코스 데이터의 장소 id, 예: p1)
+CREATE TABLE IF NOT EXISTS places (
+    no INTEGER PRIMARY KEY AUTOINCREMENT,
+    key TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    region TEXT,
+    kind TEXT,
+    created_at TEXT NOT NULL
+);
+
 -- 상권자 계정 ↔ 관광객 코스에 나오는 장소 (가게 리뷰를 모아 보기 위함)
 CREATE TABLE IF NOT EXISTS store_places (
     user_id TEXT PRIMARY KEY,
@@ -99,6 +109,7 @@ CREATE TABLE IF NOT EXISTS access_logs (
 _MIGRATIONS = [
     ("reviews", "user_id", "TEXT"),
     ("reviews", "region", "TEXT"),
+    ("reviews", "place_no", "INTEGER"),
     ("owner_actions", "store_id", "TEXT"),
     ("owner_actions", "user_id", "TEXT"),
     ("owner_actions", "status", "TEXT DEFAULT 'MEASURING'"),
@@ -128,6 +139,52 @@ def init_db() -> None:
             cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
             if col not in cols:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+    seed_places()
+
+
+def seed_places() -> None:
+    """코스 장소 목록을 순서대로 places 에 등록 (이미 있으면 번호 유지). 예전 리뷰에도 번호를 채웁니다."""
+    from app.data.tourist_data import PLACES
+    with get_conn() as conn:
+        have = {r["key"] for r in conn.execute("SELECT key FROM places")}
+        for p in PLACES:
+            if p["id"] not in have:  # 없는 것만 넣어야 번호가 건너뛰지 않음
+                conn.execute("INSERT INTO places (key, name, region, kind, created_at) VALUES (?, ?, ?, ?, ?)",
+                             (p["id"], p["name"], p["region"], p["kind"], now_iso()))
+            else:  # 장소 이름이 바뀌었으면 (예: 실제 장소로 교체) 번호는 그대로 두고 이름만 맞춥니다
+                conn.execute("UPDATE places SET name = ?, region = ?, kind = ? WHERE key = ?",
+                             (p["name"], p["region"], p["kind"], p["id"]))
+        conn.execute("UPDATE reviews SET place_no = (SELECT no FROM places WHERE places.key = reviews.place_id)"
+                     " WHERE place_no IS NULL")
+    _place_nos.clear()
+
+
+_place_nos: dict[str, int] = {}
+
+
+def place_no(key: str, name: str | None = None, region: str | None = None, kind: str | None = None) -> int:
+    """장소의 고유 번호. 처음 보는 장소면 다음 번호로 등록합니다."""
+    if key in _place_nos:
+        return _place_nos[key]
+    with get_conn() as conn:
+        row = conn.execute("SELECT no FROM places WHERE key = ?", (key,)).fetchone()
+        if row:
+            no = row["no"]
+        else:
+            no = conn.execute("INSERT INTO places (key, name, region, kind, created_at) VALUES (?, ?, ?, ?, ?)",
+                              (key, name or key, region, kind, now_iso())).lastrowid
+    _place_nos[key] = no
+    return no
+
+
+def place_nos() -> dict[str, int]:
+    with get_conn() as conn:
+        return {r["key"]: r["no"] for r in conn.execute("SELECT key, no FROM places")}
+
+
+def owners_of_place(place_id: str) -> list[str]:
+    with get_conn() as conn:
+        return [r["user_id"] for r in conn.execute("SELECT user_id FROM store_places WHERE place_id = ?", (place_id,))]
 
 
 @contextmanager
@@ -208,11 +265,12 @@ def revoke_user_tokens(user_id: str) -> None:
 
 # ── 평가 ──────────────────────────────────────
 def insert_review(place_id: str, stars: int, text: str, profile_code: str | None,
-                  user_id: str | None = None, region: str | None = None) -> int:
+                  user_id: str | None = None, region: str | None = None, place_no_: int | None = None) -> int:
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO reviews (place_id, stars, text, profile_code, user_id, region, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (place_id, stars, text, profile_code, user_id, region, now_iso()),
+            "INSERT INTO reviews (place_id, place_no, stars, text, profile_code, user_id, region, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (place_id, place_no_, stars, text, profile_code, user_id, region, now_iso()),
         )
         return cur.lastrowid
 
@@ -306,7 +364,7 @@ def set_store_place(user_id: str, place_id: str) -> None:
 def reviews_for_place(place_id: str, limit: int = 50) -> list[dict]:
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(
-            "SELECT id, stars, text, profile_code, created_at FROM reviews WHERE place_id = ? ORDER BY id DESC LIMIT ?",
+            "SELECT id, place_no, stars, text, profile_code, created_at FROM reviews WHERE place_id = ? ORDER BY id DESC LIMIT ?",
             (place_id, limit))]
 
 

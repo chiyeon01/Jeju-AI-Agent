@@ -145,10 +145,12 @@ class Btn extends StatelessWidget {
 
 /// 고르기 칩
 class ChipBtn extends StatelessWidget {
-  const ChipBtn(this.label, {super.key, this.on = false, required this.onTap});
+  const ChipBtn(this.label, {super.key, this.on = false, required this.onTap, this.accent});
   final String label;
   final bool on;
   final VoidCallback onTap;
+  /// 지역 칩처럼 고유 색이 있으면 앞에 점을 찍고, 고르면 그 색으로 채웁니다
+  final Color? accent;
   @override
   Widget build(BuildContext context) => MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -157,11 +159,17 @@ class ChipBtn extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(
-              color: on ? C.sky : C.surface,
+              color: on ? (accent ?? C.sky) : C.surface,
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: on ? C.sky : C.line),
+              border: Border.all(color: on ? (accent ?? C.sky) : C.line),
             ),
-            child: Text(label, style: tx(size: 14, weight: on ? FontWeight.w700 : FontWeight.w400, color: on ? C.skyInk : C.ink)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (accent != null) ...[
+                Container(width: 8, height: 8, decoration: BoxDecoration(color: on ? Colors.white : accent, shape: BoxShape.circle)),
+                const SizedBox(width: 6),
+              ],
+              Text(label, style: tx(size: 14, weight: on ? FontWeight.w700 : FontWeight.w400, color: on ? (accent != null ? Colors.white : C.skyInk) : C.ink)),
+            ]),
           ),
         ),
       );

@@ -29,6 +29,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     }
     expect(find.text(keepAll('지역 점수 (0~10)')), findsOneWidget);
+    expect(find.text(keepAll('장소별 평가 (고유 번호)')), findsOneWidget);
+    expect(find.text('#30'), findsOneWidget);
     await tester.tap(find.text('Agent 보고서').first);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
@@ -47,11 +49,12 @@ void main() {
     expect(find.text(keepAll('관광객 평가를 받는 내 가게를 고르세요')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('place-select')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(keepAll('애월 돌담 브런치 · 카페')).last);
+    await tester.tap(find.text(keepAll('#1 봄날카페 · 카페')).last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('연결'));
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.text(keepAll('관광객 평가 0건')), findsOneWidget);
+    expect(find.textContaining(keepAll('장소 #1')), findsOneWidget);
     await tester.tap(find.text('분석하기'));
     await tester.pump(const Duration(milliseconds: 800));
     expect(find.textContaining(keepAll('시연 화면이라'), findRichText: true), findsOneWidget);

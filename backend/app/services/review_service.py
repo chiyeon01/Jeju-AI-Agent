@@ -12,6 +12,7 @@ from app import db, events
 from app.data.owner_data import INDICATORS, STORE
 from app.data.tourist_data import PLACES_BY_ID
 from app.schemas import ReviewIn, ReviewsOut
+from app.services import insight_service
 
 DAILY_LIMIT = 20
 
@@ -27,11 +28,16 @@ def submit_reviews(reviews: list[ReviewIn], user: dict | None = None) -> Reviews
         if place is None or used_today >= DAILY_LIMIT:
             rejected += 1
             continue
-        db.insert_review(r.placeId, r.stars, r.text[:100], r.profile, user_id, place["region"])
+        no = db.place_no(place["id"], place["name"], place["region"], place["kind"])
+        db.insert_review(r.placeId, r.stars, r.text[:100], r.profile, user_id, place["region"], no)
         used_today += 1
         accepted += 1
-        events.publish(events.REVIEW, f"{place['name']} ★{r.stars}" + (f" · 성향 {r.profile}" if r.profile else ""),
-                       region=place["region"], user_id=user_id)
+        # 관리 콘솔과 이 장소를 가진 사장님 화면에 실시간으로 알림
+        events.publish(events.REVIEW, f"#{no} {place['name']} ★{r.stars}" + (f" · 성향 {r.profile}" if r.profile else ""),
+                       region=place["region"], user_id=user_id, place_id=place["id"],
+                       extra={"placeNo": no, "stars": r.stars, "profile": r.profile})
+        # 사장님이 연결된 장소면 Agent 가 리뷰를 다시 분석해 저장하고 알려 줍니다 (잠시 모아서 한 번)
+        insight_service.schedule_store_analysis(place["id"])
 
     if accepted:
         _recompute_csat()

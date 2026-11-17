@@ -20,9 +20,11 @@ logger = logging.getLogger("jejuitda.events")
 
 # 프론트 화면이 쓰는 이벤트 종류
 VISIT, REVIEW, COURSE, REVIEW_TAG, STORE = "방문 인증", "평가 등록", "코스 선택", "리뷰 분류", "매장 등록"
+ANALYSIS, REPORT = "리뷰 분석", "보고서"
 
 _loop: asyncio.AbstractEventLoop | None = None
-_subscribers: set[asyncio.Queue] = set()
+# 구독자 → 받을 장소 id (None 이면 관리자: 전부). 상권 주인은 자기 가게 장소의 이벤트만 받습니다
+_subscribers: dict[asyncio.Queue, set[str] | None] = {}
 
 
 def bind_loop(loop: asyncio.AbstractEventLoop) -> None:
@@ -30,14 +32,18 @@ def bind_loop(loop: asyncio.AbstractEventLoop) -> None:
     _loop = loop
 
 
-def publish(type_: str, text: str, *, region: str | None = None, user_id: str | None = None) -> None:
-    """이벤트를 저장하고 연결된 콘솔에 보냅니다. 어느 스레드에서 불러도 됩니다."""
+def publish(type_: str, text: str, *, region: str | None = None, user_id: str | None = None,
+            place_id: str | None = None, extra: dict | None = None) -> None:
+    """이벤트를 저장하고 연결된 콘솔·사장님 화면에 보냅니다. 어느 스레드에서 불러도 됩니다.
+    place_id 가 있으면 그 장소를 가진 상권 주인에게도 갑니다."""
     created = db.insert_event(type_, text, region, user_id)
-    msg = {"type": type_, "text": text, "at": datetime.fromisoformat(created).strftime("%H:%M:%S")}
+    msg = {"type": type_, "text": text, "at": datetime.fromisoformat(created).strftime("%H:%M:%S"),
+           **({"placeId": place_id} if place_id else {}), **(extra or {})}
     if _loop is None or not _subscribers:
         return
-    for q in list(_subscribers):
-        _loop.call_soon_threadsafe(_put_nowait, q, msg)
+    for q, places in list(_subscribers.items()):
+        if places is None or (place_id and place_id in places):
+            _loop.call_soon_threadsafe(_put_nowait, q, msg)
 
 
 def _put_nowait(q: asyncio.Queue, msg: dict) -> None:
@@ -54,17 +60,18 @@ ws_router = APIRouter()
 async def events_ws(ws: WebSocket, token: str = "") -> None:
     try:
         user = user_from_token(token)
-        if user["role"] != "ADMIN":
-            raise ApiError(403, "FORBIDDEN", "관리자만 볼 수 있어요.")
+        if user["role"] not in ("ADMIN", "MERCHANT"):
+            raise ApiError(403, "FORBIDDEN", "관리자와 상권 주인만 볼 수 있어요.")
     except ApiError:
         await ws.close(code=4401)
         return
     await ws.accept()
     q: asyncio.Queue = asyncio.Queue(maxsize=200)
-    _subscribers.add(q)
+    admin = user["role"] == "ADMIN"
+    _subscribers[q] = None if admin else {p for p in [db.get_store_place(user["id"])] if p}
     try:
-        # 접속하자마자 최근 이벤트를 오래된 순으로 보내 피드를 채움
-        for e in reversed(db.recent_events(10)):
+        # 관리자는 접속하자마자 최근 이벤트를 오래된 순으로 받아 피드를 채움
+        for e in reversed(db.recent_events(10) if admin else []):
             await ws.send_json({"type": e["type"], "text": e["text"],
                                 "at": datetime.fromisoformat(e["created_at"]).strftime("%H:%M:%S")})
         while True:
@@ -72,4 +79,4 @@ async def events_ws(ws: WebSocket, token: str = "") -> None:
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
-        _subscribers.discard(q)
+        _subscribers.pop(q, None)

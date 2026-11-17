@@ -20,12 +20,18 @@
 # ─────────────────────────────────────────────
 from __future__ import annotations
 
+import json
+import logging
+
 from app.data.tourist_data import KIND_LABEL, PLACES, REGIONS_BY_ID, WEATHER
 from app.errors import ApiError
-from app.schemas import CourseOut, CourseRequest, CourseStopOut, ProfileOut, WeatherOut
+from app.schemas import AlternativeRequest, CourseOut, CourseRequest, CourseStopOut, ProfileOut, WeatherOut
 from app.services.course_session import CoursePrefs
 from app.services.datahub_service import region_crowd
 from app.services.geo import haversine_km, travel_minutes
+from app.services.llm_service import get_llm_service
+
+logger = logging.getLogger("jejuitda.course")
 
 W1_AFFINITY = 18.0
 W2_POPULARITY = 6.0
@@ -133,6 +139,10 @@ def _pick_best(
 
 
 def plan_course(req: CourseRequest, prefs: CoursePrefs | None = None) -> CourseOut:
+    return CourseOut(weather=WeatherOut(code=req.weather, **WEATHER[req.weather]), stops=_plan_stops(req, prefs))
+
+
+def _plan_stops(req: CourseRequest, prefs: CoursePrefs | None = None) -> list[CourseStopOut]:
     origin = REGIONS_BY_ID.get(req.regionId)
     if origin is None:
         raise ApiError(404, "REGION_NOT_FOUND", f"알 수 없는 지역이에요: {req.regionId}")
@@ -146,7 +156,10 @@ def plan_course(req: CourseRequest, prefs: CoursePrefs | None = None) -> CourseO
     prefs = prefs or CoursePrefs()
     candidates = [p for p in PLACES if p["id"] not in prefs.exclude_ids]
 
-    for kinds in _category_order(rain):
+    order = _category_order(rain)
+    if prefs.kids:  # 아이와 함께면 노을 명소 대신 산책·체험
+        order = [["indoor", "spot"] if k == ["sunset"] else k for k in order]
+    for kinds in order:
         kinds = [k for k in kinds if k not in prefs.exclude_kinds]
         if not kinds:
             continue
@@ -157,7 +170,9 @@ def plan_course(req: CourseRequest, prefs: CoursePrefs | None = None) -> CourseO
             predicate = lambda p: p["indoor"]
         # 대화로 요청한 "바다 보이는 곳"을 가장 먼저 지키고, 없으면 풀어 줌
         ocean = (lambda p: p.get("ocean") or p["kind"] not in prefs.ocean_kinds) if prefs.ocean_kinds else None
-        predicates = [ocean, predicate]
+        kids = (lambda p: p.get("kids")) if prefs.kids else None
+        mood = (lambda p: p.get("mood") or p["kind"] != "cafe") if prefs.mood_cafe else None
+        predicates = [kids, mood, ocean, predicate]
 
         place = _pick_best(candidates, kinds, used, req.profile, rain, last_point, predicates, crowd)
         if not place:
@@ -168,37 +183,196 @@ def plan_course(req: CourseRequest, prefs: CoursePrefs | None = None) -> CourseO
             last_point = (place["lat"], place["lon"])
 
     keep = max(2, len(stops) - req.options.removeCount)
-    trimmed = stops[:keep]
+    return _schedule(stops[:keep], req, crowd)
 
-    h, m = (int(x) for x in req.startTime.split(":"))
-    start = h * 60 + m
-    hours = req.hours or req.profile.hours
-    end_limit = start + hours * 60 if hours else None
+
+def _minutes(hhmm: str) -> int:
+    h, m = (int(x) for x in hhmm.split(":"))
+    return h * 60 + m
+
+
+def _move_factor(profile: ProfileOut) -> float:
+    """버스·배만 타면 자동차보다 이동이 오래 걸립니다 (자동차·택시·렌터카가 하나라도 있으면 1배)"""
+    t = profile.transport or ""
+    if not t or any(w in t for w in ("자동차", "택시", "렌터카", "차")):
+        return 1.0
+    return 1.6
+
+
+def _schedule(places: list[dict], req: CourseRequest, crowd: dict | None, why: dict[str, str] | None = None) -> list[CourseStopOut]:
+    start = _minutes(req.startTime)
+    if req.endTime:
+        end_limit = _minutes(req.endTime)
+        if end_limit <= start:
+            end_limit += 24 * 60  # 자정을 넘기는 여행
+    else:
+        hours = req.hours or req.profile.hours
+        end_limit = start + hours * 60 if hours else None
+    factor = _move_factor(req.profile)
     t = start
     out_stops: list[CourseStopOut] = []
     prev: dict | None = None
-    for place in trimmed:
+    for place in places:
         if prev is None:
             move = 0
         else:
             km = haversine_km(prev["lat"], prev["lon"], place["lat"], place["lon"])
-            move = travel_minutes(km)
-        # 이용 시간(hours)을 넘기는 장소는 뺍니다 (최소 2곳은 유지)
+            move = round(travel_minutes(km) * factor)
+        # 여행 끝 시각을 넘기는 장소는 뺍니다 (최소 2곳은 유지)
         if end_limit is not None and len(out_stops) >= 2 and t + move + place["stay"] > end_limit:
             break
         t += move
         at = f"{(t // 60) % 24:02d}:{t % 60:02d}"
         t += place["stay"]
-        out_stops.append(
-            CourseStopOut(
-                **{**place, "reasons": _with_real_crowd_reason(place, crowd)},
-                at=at,
-                move=move,
-            )
-        )
+        reasons = _with_real_crowd_reason(place, crowd)
+        if why and why.get(place["id"]):
+            reasons = [["AI", why[place["id"]]], *reasons]
+        out_stops.append(CourseStopOut(**{**place, "reasons": reasons}, at=at, move=move))
         prev = place
+    return out_stops
 
-    return CourseOut(weather=WeatherOut(code=req.weather, **WEATHER[req.weather]), stops=out_stops)
+
+# ── 다른 코스 보기 (GPT) ─────────────────────────
+PHASE = {"cafe": 0, "spot": 0, "indoor": 0, "sunset": 1, "food": 2}
+
+_ALT_SYSTEM = """너는 제주 여행 코스 플래너 Agent야. 사용자가 "다른 코스 보기"를 눌렀어.
+지금까지 보여 준 코스와 겹치지 않는 새 코스를 후보 장소 중에서만 골라 JSON 으로 답해.
+{"summary": "<새 코스를 한 문장으로 소개 (어떤 점이 달라졌는지)>",
+ "stops": [{"id": "<후보 id>", "why": "<이 사람에게 고른 이유, 25자 이내>"}]}
+규칙:
+- 3~5곳. 하루 흐름은 낮(카페·산책·실내) → 노을 → 저녁 식사 순서.
+- 출발 지역에서 너무 멀지 않게 (후보의 km 참고), 이동 수단과 동행·성향을 고려해.
+- 비가 오면 실내(indoor=true) 위주. 해산물·아이 동반·분위기 좋은 카페 같은 요청(prefs)이 있으면 지켜.
+- 꼭 필요할 때만 이전 코스 장소를 1곳까지 다시 써도 돼.
+- 후보 목록에 없는 id 는 쓰지 마."""
 
 
-__all__ = ["plan_course", "KIND_LABEL", "WEATHER"]
+def plan_alternative(req: AlternativeRequest, prefs: CoursePrefs | None = None) -> CourseOut:
+    """지금까지 본 코스(avoid)를 피해 새 코스. GPT 가 고르고, 안 되면 규칙 기반으로 avoid 를 뺀 코스."""
+    origin = REGIONS_BY_ID.get(req.regionId)
+    if origin is None:
+        raise ApiError(404, "REGION_NOT_FOUND", f"알 수 없는 지역이에요: {req.regionId}")
+    prefs = prefs or CoursePrefs()
+    crowd = region_crowd()
+    rain = req.weather == "rain"
+    avoid = set(req.avoid)
+    pool = [p for p in PLACES if p["id"] not in prefs.exclude_ids]
+    near = sorted(pool, key=lambda p: haversine_km(origin["lat"], origin["lon"], p["lat"], p["lon"]))[:18]
+    weather = WeatherOut(code=req.weather, **WEATHER[req.weather])
+
+    llm = get_llm_service()
+    if llm.is_enabled:
+        cands = [{"id": p["id"], "name": p["name"], "kind": p["kind"], "indoor": p["indoor"], "seafood": p["seafood"],
+                  "kids": p.get("kids", False), "moodCafe": p.get("mood", False), "rating": p["rating"],
+                  "km": round(haversine_km(origin["lat"], origin["lon"], p["lat"], p["lon"]), 1),
+                  "shownBefore": p["id"] in avoid} for p in near]
+        prof = req.profile
+        prompt = json.dumps({
+            "출발": origin["name"], "성향": f"{prof.name} ({prof.code})", "태그": prof.tags,
+            "동행": prof.companion, "이동 수단": prof.transport, "시간": f"{req.startTime}~{req.endTime or ''}",
+            "날씨": "비" if rain else "맑음", "해산물 저녁": req.options.seafood,
+            "prefs": {"아이 동반": prefs.kids, "분위기 좋은 카페": prefs.mood_cafe, "뺄 종류": sorted(prefs.exclude_kinds)},
+            "이전 코스": [PLACES_BY_ID_LOCAL[i]["name"] for i in req.avoid if i in PLACES_BY_ID_LOCAL],
+            "후보": cands,
+        }, ensure_ascii=False)
+        res = llm.chat(_ALT_SYSTEM, prompt, json_mode=True, temperature=0.8)
+        if res.ok and res.data:
+            ids, why = [], {}
+            valid = {p["id"] for p in near}
+            for s in res.data.get("stops") or []:
+                pid = s.get("id") if isinstance(s, dict) else None
+                if pid in valid and pid not in ids:
+                    ids.append(pid)
+                    why[pid] = str(s.get("why") or "")[:40]
+            if len(ids) >= 2 and len([i for i in ids if i in avoid]) <= 1:
+                places = sorted((PLACES_BY_ID_LOCAL[i] for i in ids[:5]), key=lambda p: PHASE.get(p["kind"], 0))
+                stops = _schedule(places, req, crowd, why)
+                if len(stops) >= 2:
+                    return CourseOut(weather=weather, stops=stops, source="gpt",
+                                     summary=str(res.data.get("summary") or "").strip() or None)
+        logger.info("다른 코스: GPT 결과를 쓸 수 없어 규칙 기반으로 짭니다 (%s)", res.error if not res.ok else "형식 오류")
+
+    # 규칙 기반: 이전 장소를 빼고 다시 (후보가 모자라면 덜 빼고)
+    alt = prefs.copy()
+    alt.exclude_ids |= avoid
+    stops = _plan_stops(req, alt)
+    if len(stops) < 3:
+        alt.exclude_ids = prefs.exclude_ids | set(req.avoid[-len(req.avoid) // 2:] if req.avoid else [])
+        stops = _plan_stops(req, alt)
+    return CourseOut(weather=weather, stops=stops, source="rule",
+                     summary="이전에 본 코스와 다른 장소 위주로 다시 골랐어요.")
+
+
+PLACES_BY_ID_LOCAL = {p["id"]: p for p in PLACES}
+
+
+# ── 대화로 코스 고치기 (GPT) ─────────────────────
+_EDIT_SYSTEM = """너는 제주 여행 코스 플래너 Agent야. 사용자가 지금 코스를 보고 자유롭게 말하면,
+그 말대로 코스를 고쳐서 JSON 으로만 답해.
+{"reply": "<사용자에게 보여줄 한국어 답변 1~2문장. 무엇을 어떻게 바꿨는지, 넣은 장소 이름을 그대로>",
+ "stops": [{"id": "<후보 id>", "why": "<고른 이유 25자 이내>"}] 또는 null}
+규칙:
+- stops 에는 고친 뒤의 코스 전체를 방문 순서대로 적어 (그대로 두는 장소도 포함).
+- 장소는 반드시 후보 목록의 id 만 써. 후보에 없는 장소나 이름을 지어내지 마.
+- 사용자가 원하는 종류(예: 미술관, 기념품샵, 아이와 갈 곳, 해산물, 바다 보이는 카페)는 후보의 kind·label·tags·desc 를 보고 골라.
+  같은 조건이면 지금 코스와 가까운(km) 곳을 골라.
+- 넣어 달라는 요청은 기존 장소를 지우지 말고 알맞은 자리에 끼워 넣어. 빼 달라는 장소만 빼.
+- 하루 흐름은 낮(카페·산책·실내) → 노을 → 저녁 식사. 여행 시간(시작~끝) 안에 다 돌 수 있게 2~7곳.
+- 비가 오면 실내(indoor=true) 위주.
+- 코스를 바꿀 필요가 없는 질문(예: 여기 주차돼?)이면 stops 는 null 로 두고 reply 로만 답해.
+- 후보 중에 원하는 종류가 없으면 stops 는 null, reply 에서 없다고 솔직하게 말해."""
+
+
+def edit_course_by_chat(message: str, history: list[tuple[str, str]], current_ids: list[str],
+                        req: CourseRequest) -> tuple[str, CourseOut | None] | None:
+    """사용자 말 그대로 GPT 에게 코스 수정을 맡깁니다. GPT 가 꺼져 있거나 실패하면 None (규칙 기반으로)."""
+    llm = get_llm_service()
+    if not llm.is_enabled:
+        return None
+    origin = REGIONS_BY_ID.get(req.regionId)
+    if origin is None:
+        return None
+    cur = [PLACES_BY_ID_LOCAL[i] for i in current_ids if i in PLACES_BY_ID_LOCAL]
+    anchors = cur or [origin]
+
+    def km(p: dict) -> float:
+        return round(min(haversine_km(a["lat"], a["lon"], p["lat"], p["lon"]) for a in anchors), 1)
+
+    cands = [{"id": p["id"], "name": p["name"], "kind": p["kind"], "label": p.get("label") or KIND_LABEL[p["kind"]],
+              "addr": p.get("addr", ""), "tags": p.get("tags", []), "desc": p["reasons"][0][1] if p["reasons"] else "",
+              "indoor": p["indoor"], "seafood": p["seafood"], "kids": p.get("kids", False),
+              "oceanView": p.get("ocean", False), "stayMin": p["stay"], "km": km(p)} for p in PLACES]
+    prof = req.profile
+    prompt = json.dumps({
+        "출발": origin["name"], "성향": f"{prof.name} ({prof.code})", "동행": prof.companion, "이동 수단": prof.transport,
+        "여행 시간": f"{req.startTime}~{req.endTime or ''}", "날씨": "비" if req.weather == "rain" else "맑음",
+        "지금 코스": [{"id": p["id"], "name": p["name"], "label": p.get("label") or KIND_LABEL[p["kind"]]} for p in cur],
+        "앞선 대화": [f"{'사용자' if who == 'me' else 'Agent'}: {text}" for who, text in history[-6:]],
+        "후보(km 는 지금 코스에서 가장 가까운 거리)": sorted(cands, key=lambda c: c["km"]),
+    }, ensure_ascii=False)
+    res = llm.chat(_EDIT_SYSTEM, f"{prompt}\n\n사용자: {message}", json_mode=True, temperature=0.4)
+    if not (res.ok and res.data):
+        logger.info("대화 수정: GPT 실패, 규칙 기반으로 (%s)", res.error)
+        return None
+    reply = str(res.data.get("reply") or "").strip()
+    raw = res.data.get("stops")
+    if not reply:
+        return None
+    if raw is None:
+        return reply, None
+    ids, why = [], {}
+    for s in raw if isinstance(raw, list) else []:
+        pid = s.get("id") if isinstance(s, dict) else s if isinstance(s, str) else None
+        if pid in PLACES_BY_ID_LOCAL and pid not in ids:
+            ids.append(pid)
+            if isinstance(s, dict) and s.get("why"):
+                why[pid] = str(s["why"])[:40]
+    if len(ids) < 2:
+        logger.info("대화 수정: GPT 가 고른 장소가 2곳 미만이라 쓰지 않습니다 (%s)", raw)
+        return None
+    stops = _schedule([PLACES_BY_ID_LOCAL[i] for i in ids[:7]], req, region_crowd(), why)
+    weather = WeatherOut(code=req.weather, **WEATHER[req.weather])
+    return reply, CourseOut(weather=weather, stops=stops, source="gpt", summary=None)
+
+
+__all__ = ["plan_course", "plan_alternative", "edit_course_by_chat", "KIND_LABEL", "WEATHER"]

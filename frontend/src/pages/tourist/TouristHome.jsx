@@ -1,10 +1,11 @@
 // 관광객 첫 화면: 지금까지의 기록을 한눈에 보고, 새 여행을 시작합니다.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { loadHistory, fmtWhen } from '../../api/history.js';
 import { KIND_LABEL } from '../../mock/tourist.js';
 import TypeCard from './TypeCard.jsx';
+import PlaceLink from '../../components/PlaceLink.jsx';
 
 const starText = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
 
@@ -12,7 +13,15 @@ export default function TouristHome() {
   const { user } = useAuth();
   const nav = useNavigate();
   const h = useMemo(() => loadHistory(user.id), [user.id]);
-  const last = h.profiles[0]?.profile ?? null;
+  // 지금까지 나온 여행 유형 (같은 유형은 가장 최근 것 하나만)
+  const types = useMemo(() => {
+    const seen = new Map();
+    for (const x of h.profiles) if (x.profile?.code && !seen.has(x.profile.code)) seen.set(x.profile.code, x);
+    return [...seen.values()];
+  }, [h.profiles]);
+  const [pick, setPick] = useState(types[0]?.profile.code ?? null);
+  const chosen = types.find((t) => t.profile.code === pick) ?? types[0] ?? null;
+  const last = chosen?.profile ?? null;
   const avg = h.reviews.length ? (h.reviews.reduce((s, r) => s + r.stars, 0) / h.reviews.length).toFixed(1) : '-';
 
   return (
@@ -24,8 +33,8 @@ export default function TouristHome() {
             <h2>{user.name}님, 반가워요</h2>
           </div>
           <div className="row">
-            {last && <button className="btn" onClick={() => nav('/tourist/new', { state: { profile: last } })}>지난 성향으로 코스 만들기</button>}
-            <button className="btn primary" onClick={() => nav('/tourist/new')}>{last ? '성향 테스트부터 새로 시작' : '첫 여행 코스 만들기'}</button>
+            {last && <button className="btn primary" onClick={() => nav('/tourist/new', { state: { profile: last } })}>이 유형으로 코스 만들기</button>}
+            <button className={`btn ${last ? '' : 'primary'}`} onClick={() => nav('/tourist/new')}>{last ? '성향 테스트 다시 하기' : '첫 여행 코스 만들기'}</button>
           </div>
         </div>
 
@@ -40,8 +49,18 @@ export default function TouristHome() {
             <h3>내 여행 유형</h3>
             {last ? (
               <>
-                <TypeCard profile={last} />
-                <p className="small muted">{fmtWhen(h.profiles[0].at)}에 테스트했어요{h.profiles.length > 1 ? ` · 지금까지 ${h.profiles.length}번` : ''}</p>
+                {types.length > 1 && (
+                  <div className="chips" role="radiogroup" aria-label="내 여행 유형">
+                    {types.map((t) => (
+                      <button key={t.profile.code} type="button" role="radio" aria-checked={t.profile.code === chosen.profile.code}
+                        className={`chip ${t.profile.code === chosen.profile.code ? 'on' : ''}`} onClick={() => setPick(t.profile.code)}>
+                        {t.profile.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <TypeCard profile={last} showTrip={false} />
+                <p className="small muted">{fmtWhen(chosen.at)}에 나온 유형이에요 · 고른 유형으로 시작하면 여행 시간·이동 수단부터 다시 정해요</p>
               </>
             ) : (
               <div className="card empty"><p>아직 성향 테스트를 하지 않았어요.</p><Link className="btn primary sm" to="/tourist/new">5문항 테스트 하기</Link></div>
@@ -53,7 +72,7 @@ export default function TouristHome() {
                 <ul className="hist">
                   {h.reviews.slice(0, 5).map((r, i) => (
                     <li key={i}>
-                      <div className="row between"><strong>{r.name}</strong><span className="small" style={{ color: 'var(--warn)' }} aria-label={`별 ${r.stars}개`}>{starText(r.stars)}</span></div>
+                      <div className="row between"><PlaceLink name={r.name} /><span className="small" style={{ color: 'var(--warn)' }} aria-label={`별 ${r.stars}개`}>{starText(r.stars)}</span></div>
                       {r.text && <span className="small">{r.text}</span>}
                       <span className="small muted">{fmtWhen(r.at)}</span>
                     </li>
@@ -71,7 +90,7 @@ export default function TouristHome() {
                   {h.courses.slice(0, 6).map((c, i) => (
                     <li key={i}>
                       <div className="row between">
-                        <strong>{c.origin} 출발 · {c.stops.length}곳</strong>
+                        <Link className="place-link" to={`/tourist/history/${i}`}>{c.origin} 출발 · {c.stops.length}곳</Link>
                         <span className="small muted">{fmtWhen(c.at)}</span>
                       </div>
                       <span className="small">{c.stops.map((s) => s.name).join(' → ')}</span>

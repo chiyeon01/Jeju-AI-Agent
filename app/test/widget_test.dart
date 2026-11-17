@@ -28,7 +28,7 @@ void _bigScreen(WidgetTester tester) {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('관광객: 로그인 → 기록 홈 → 성향 테스트 → 지역 → 코스 → 평가 → 기록 홈', (tester) async {
+  testWidgets('관광객: 로그인 → 기록 홈 → 성향 테스트 → 여행 정보 → 지역 → 코스 → 평가 → 기록 홈', (tester) async {
     _bigScreen(tester);
     await tester.pumpWidget(const ItdaApp());
     expect(find.text(keepAll('제주잇다')), findsOneWidget);
@@ -42,15 +42,33 @@ void main() {
     expect(find.text('관리'), findsNothing); // 관광객에게는 관리 메뉴가 없다
 
     await _tap(tester, '예시 응답으로 건너뛰기');
+    // 여행 정보: 이동 수단 여러 개, 시작·끝 시각
+    expect(find.text(keepAll('이번 여행은 어떻게 다니나요?')), findsOneWidget);
+    for (final t in ['자동차', '택시', '버스', '배']) {
+      expect(find.text(t), findsOneWidget);
+    }
+    await _tap(tester, '버스');
+    await _tap(tester, '자동차'); // 자동차를 끄고 버스만
+    expect(find.text(keepAll('8시간 여행이에요.')), findsOneWidget);
+    await _tap(tester, '출발 지역 고르기');
     expect(find.text(keepAll('어디에서 시작할까요?')), findsOneWidget);
+    expect(find.textContaining(keepAll('버스 · 10:00~18:00'), findRichText: true), findsWidgets);
     expect(find.text(keepAll('카카오맵 키를 넣으면 지도가 표시됩니다')), findsOneWidget);
 
     await _tap(tester, '애월읍');
     await _tap(tester, '애월읍에서 코스 만들기', ms: 6500); // 실시간 날씨·허브를 최대 5초 기다린 뒤 코스
     expect(find.text(keepAll('대화로 코스 고치기')), findsOneWidget);
-    // GPT 키가 없는 테스트에서는 데이터 점수 코스 (매번 조금씩 달라서 장소 이름 대신 문구로 확인)
-    expect(find.text(keepAll('데이터 점수로 짠 코스예요')), findsOneWidget);
+    // GPT 키가 없는 테스트에서는 규칙 코스 (매번 조금씩 달라서 장소 이름 대신 문구로 확인)
+    expect(find.textContaining(keepAll('내 성향에 맞춰 짠 코스예요')), findsOneWidget);
     expect(find.textContaining(keepAll('이동 약')), findsWidgets);
+    expect(find.textContaining('D1'), findsNothing); // 데이터 출처 글씨는 없앰
+    expect(find.textContaining('↗', findRichText: true), findsWidgets); // 장소 이름은 네이버 지도 링크
+    // 대화 예시는 3개
+    for (final t in ['아기가 놀기 좋은 곳으로 수정해줘.', '분좋카를 원해.', '회를 먹고싶어.']) {
+      expect(find.text(t), findsOneWidget);
+    }
+    await _tap(tester, '다른 코스 보기', ms: 500);
+    expect(find.textContaining(keepAll('이전에 본 코스와 다른 장소')), findsOneWidget);
 
     // 왼쪽 위 뒤로가기 → 이전 단계(출발 지역)
     await tester.tap(find.byTooltip('뒤로가기'));
@@ -66,10 +84,16 @@ void main() {
 
     // 건너뛰면 기록 홈으로, 방금 코스와 성향이 기록에 남는다
     await _tap(tester, '건너뛰기');
-    expect(find.text(keepAll('애월읍 출발 · 4곳')), findsOneWidget);
-    expect(find.text('지난 성향으로 코스 만들기'), findsOneWidget);
-    await _tap(tester, '지난 성향으로 코스 만들기');
-    expect(find.text(keepAll('어디에서 시작할까요?')), findsOneWidget); // 성향 테스트 건너뜀
+    expect(find.textContaining('애월읍 출발 ·'), findsOneWidget);
+    // 최근 코스를 누르면 그 코스 자세히
+    await tester.tap(find.textContaining('애월읍 출발 ·').first);
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(find.text('내 여행 기록으로'), findsOneWidget);
+    expect(find.textContaining(keepAll('버스 · 10:00~18:00')), findsOneWidget);
+    await _tap(tester, '내 여행 기록으로');
+    expect(find.text('이 유형으로 코스 만들기'), findsOneWidget);
+    await _tap(tester, '이 유형으로 코스 만들기');
+    expect(find.text(keepAll('이번 여행은 어떻게 다니나요?')), findsOneWidget); // 성향 테스트 건너뛰고 여행 정보부터
     await tester.tap(find.byTooltip('뒤로가기'));
     for (var i = 0; i < 3; i++) {
       await tester.pump(const Duration(milliseconds: 800));

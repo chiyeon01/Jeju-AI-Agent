@@ -19,10 +19,12 @@ from app.schemas import (
     RegionOut,
     ReviewsOut,
     ReviewsRequest,
+    AlternativeRequest,
 )
 from app.security import current_user, require_roles
 from app.services import course_session
 from app.services.chat_service import chat_course as chat_course_service
+from app.services.course_service import plan_alternative
 from app.services.course_service import plan_course as plan_course_service
 from app.services.geo import haversine_km
 from app.services.profile_service import analyze_profile as analyze_profile_service
@@ -68,11 +70,28 @@ def plan_course(req: CourseRequest, user: dict = Depends(tourist)) -> CourseOut:
     return course
 
 
+@router.post("/course/alternative", response_model=CourseOut, response_model_exclude_none=True)
+def alternative_course(req: AlternativeRequest, user: dict = Depends(tourist)) -> CourseOut:
+    """다른 코스 보기: 지금까지 보여 준 장소(avoid)와 겹치지 않게 Agent(GPT)가 새 코스를 고릅니다.
+    이후 대화 수정이 이 코스를 기준으로 하도록, 이전 장소는 이번 여행 동안 후보에서 뺍니다."""
+    session = course_session.get(user["id"])
+    course = plan_alternative(req, session.prefs)
+    ids = [s.id for s in course.stops]
+    prefs = session.prefs.copy()
+    prefs.exclude_ids |= set(req.avoid) - set(ids)
+    course_session.save_prefs(user["id"], prefs)
+    course_session.save_plan(user["id"], req, ids)
+    region = REGIONS_BY_ID[req.regionId]
+    events.publish(events.COURSE, f"{region['name']} 다른 코스 {len(ids)}곳 ({'AI' if course.source == 'gpt' else '규칙'})",
+                   region=req.regionId, user_id=user["id"])
+    return course
+
+
 @router.post("/course/chat", response_model=ChatOut, response_model_exclude_none=True)
 def chat_course(req: ChatRequest, user: dict = Depends(tourist)) -> ChatOut:
     """대화로 코스 수정 (예: "저녁은 해산물로 바꿔줘", "카페는 바다 보이는 곳으로", "함덕 해변 빼줘").
     patch 로 담을 수 없는 요청은 서버가 사용자별로 기억해 다음 /tourist/course 에 반영합니다."""
-    return chat_course_service(req.message, user["id"])
+    return chat_course_service(req.message, user["id"], req.stopIds, [(t.from_, t.text) for t in req.history])
 
 
 @router.post("/reviews", response_model=ReviewsOut)

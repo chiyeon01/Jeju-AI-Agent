@@ -19,6 +19,15 @@ const _kindWords = [
 ];
 const _numWords = {'한': 1, '하나': 1, '두': 2, '둘': 2, '세': 3, '셋': 3};
 
+// 특정한 종류의 장소 (장소 tags 로 찾습니다). 한 문장에 여러 개면 하나씩 넣습니다
+const _tagWords = [
+  ('미술관', r'미술관|갤러리|미술|그림', '미술관'),
+  ('박물관', r'박물관', '박물관'),
+  ('기념품', r'기념품|소품\s*샵|소품|굿즈|선물|쇼핑', '기념품샵'),
+];
+
+List<(String, String, String)> wantedTags(String m) => [for (final t in _tagWords) if (RegExp(t.$2).hasMatch(m)) t];
+
 // 하루 흐름: 낮(카페·산책·실내) → 노을 → 저녁 식사
 const _phase = {'cafe': 0, 'spot': 0, 'indoor': 0, 'sunset': 1, 'food': 2};
 int _ph(String kind) => _phase[kind] ?? 0;
@@ -29,6 +38,7 @@ const _addedReason = ('요청', '대화로 추가한 장소예요');
 bool isAddRequest(String message) {
   final m = message.replaceAll(RegExp(r'\s+'), ' ');
   if (RegExp(r'해산물|회로|바다\s*음식|줄여|빼|실내로\s*바꿔').hasMatch(m)) return false;
+  if (wantedTags(m).isNotEmpty) return true; // "미술관도", "근처에 기념품샵 있으면 좋겠어"
   return RegExp(r'늘려|늘리|추가|더\s*넣|넣어|하나\s*더|한\s*곳\s*더|\d+\s*곳\s*더|더\s*가고|더\s*많이|더\s*추천').hasMatch(m);
 }
 
@@ -90,6 +100,21 @@ List<Place> _pick(List<Place> stops, {required int count, String? kind, required
   return picked;
 }
 
+/// 미술관·기념품샵처럼 콕 집은 종류: 종류마다 지금 코스에서 가장 가까운 한 곳
+List<Place> _pickTagged(List<Place> stops, List<(String, String, String)> tags, HubData? hub) {
+  final all = applyHub(places, hub);
+  final used = {for (final s in stops) s.id};
+  final picked = <Place>[];
+  for (final (tag, _, _) in tags) {
+    final pool = [for (final p in all) if (p.tags.contains(tag) && !used.contains(p.id) && !picked.any((x) => x.id == p.id)) p];
+    if (pool.isEmpty) continue;
+    double near(Place p) => stops.isEmpty ? 0 : stops.map((s) => _dist(s, p)).reduce((a, b) => a < b ? a : b);
+    pool.sort((a, b) => near(a).compareTo(near(b)));
+    picked.add(pool.first);
+  }
+  return picked;
+}
+
 String _end(List<Stop> stops) {
   final last = stops.last;
   final p = last.at.split(':').map(int.parse).toList();
@@ -117,18 +142,23 @@ AddResult? addToCourse(String message, Course course, {required String startTime
   if (!isAddRequest(message)) return null;
   final room = maxStops - course.stops.length;
   if (room <= 0) return AddResult('지금 ${course.stops.length}곳이라 더 넣으면 하루에 다 돌기 어려워요. 하나를 빼고 바꿔 볼까요?', null, const []);
-  final kind = _wantedKind(message);
+  final tags = wantedTags(message);
+  final kind = tags.isEmpty ? _wantedKind(message) : null;
+  final cur = [for (final s in course.stops) s.place];
   final picked = [
-    for (final p in _pick([for (final s in course.stops) s.place], count: _wantedCount(message).clamp(1, room), kind: kind, rain: rain, hub: hub))
+    for (final p in tags.isNotEmpty
+        ? _pickTagged(cur, tags.take(room).toList(), hub)
+        : _pick(cur, count: _wantedCount(message).clamp(1, room), kind: kind, rain: rain, hub: hub))
       p.withReasons([_addedReason, ...p.reasons]),
   ];
   if (picked.isEmpty) {
-    return AddResult('${kind != null ? '${kindLabel[kind]} 중에는 ' : ''}더 넣을 만한 곳을 찾지 못했어요. 다른 종류로 말해 주세요.', null, const []);
+    final what = tags.isNotEmpty ? '${tags.map((t) => t.$3).join('·')} 중에는 ' : kind != null ? '${kindLabel[kind]} 중에는 ' : '';
+    return AddResult('$what더 넣을 만한 곳을 찾지 못했어요. 다른 종류로 말해 주세요.', null, const []);
   }
   final whyById = {for (final s in course.stops) s.place.id: s.why};
   final merged = insertPlaces([for (final s in course.stops) s.place], picked);
   final stops = schedule([for (final p in merged) (p, whyById[p.id])], startTime);
-  final names = picked.map((p) => "'${p.name}'").join(', ');
+  final names = picked.map((p) => "'${p.name}'(${p.kindName}, ${p.addr})").join(', ');
   return AddResult('$names 추가했어요. 이제 ${stops.length}곳을 도는 코스이고, ${_end(stops)}쯤 끝나요.${_lateSunset(stops)}',
       Course(course.weather, stops, summary: course.summary, source: course.source), [for (final p in picked) p.id]);
 }

@@ -20,10 +20,22 @@ const KIND_WORDS = [
 
 const NUM_WORDS = { 한: 1, 하나: 1, 두: 2, 둘: 2, 세: 3, 셋: 3 };
 
+// 특정한 종류의 장소 (장소 tags 로 찾습니다). 한 문장에 여러 개면 하나씩 넣습니다
+const TAG_WORDS = [
+  ['미술관', /미술관|갤러리|미술|그림/, '미술관'],
+  ['박물관', /박물관/, '박물관'],
+  ['기념품', /기념품|소품\s*샵|소품샵|소품|굿즈|선물|쇼핑/, '기념품샵'],
+];
+
+export function wantedTags(message) {
+  return TAG_WORDS.filter(([, re]) => re.test(message));
+}
+
 /** "늘려줘 / 추가 / 하나 더 / 넣어줘" 류인지. 해산물·줄이기·실내 전환은 백엔드가 처리하므로 제외 */
 export function isAddRequest(message) {
   const m = message.replace(/\s+/g, ' ');
   if (/해산물|회로|바다\s*음식|줄여|빼|실내로\s*바꿔/.test(m)) return false;
+  if (wantedTags(m).length) return true; // "미술관도", "근처에 기념품샵 있으면 좋겠어"
   return /늘려|늘리|추가|더\s*넣|넣어|하나\s*더|한\s*곳\s*더|\d+\s*곳\s*더|더\s*가고|더\s*많이|더\s*추천/.test(m);
 }
 
@@ -93,6 +105,20 @@ function pickPlaces(stops, { count, kind, rain, hub }) {
   return picked;
 }
 
+/** 미술관·기념품샵처럼 콕 집은 종류: 종류마다 지금 코스에서 가장 가까운 한 곳 */
+function pickTagged(stops, tags, hub) {
+  const all = applyHub(PLACES, hub);
+  const used = new Set(stops.map((s) => s.id));
+  const picked = [];
+  for (const [tag] of tags) {
+    const pool = all.filter((p) => p.tags?.includes(tag) && !used.has(p.id) && !picked.some((x) => x.id === p.id));
+    if (!pool.length) continue;
+    const near = (p) => Math.min(...stops.map((s) => km(s, p)));
+    picked.push([...pool].sort((a, b) => near(a) - near(b))[0]);
+  }
+  return picked;
+}
+
 /**
  * "코스를 더 늘려줘" 같은 요청을 처리합니다. 해당 요청이 아니면 null.
  * 결과 { reply, course, added: [장소 id] }
@@ -103,15 +129,19 @@ export function addToCourse(message, course, { startTime, rain = false, hub = nu
   if (room <= 0) {
     return { reply: `지금 ${course.stops.length}곳이라 더 넣으면 하루에 다 돌기 어려워요. 하나를 빼고 바꿔 볼까요?`, course: null, added: [] };
   }
-  const kind = wantedKind(message);
-  const picked = pickPlaces(course.stops, { count: Math.min(room, wantedCount(message)), kind, rain, hub })
+  const tags = wantedTags(message);
+  const kind = tags.length ? null : wantedKind(message);
+  const picked = (tags.length
+    ? pickTagged(course.stops, tags.slice(0, room), hub)
+    : pickPlaces(course.stops, { count: Math.min(room, wantedCount(message)), kind, rain, hub }))
     .map((p) => ({ ...p, reasons: [['요청', '대화로 추가한 장소예요'], ...p.reasons] }));
   if (!picked.length) {
-    return { reply: `${kind ? `${KIND_LABEL[kind]} 중에는 ` : ''}더 넣을 만한 곳을 찾지 못했어요. 다른 종류로 말해 주세요.`, course: null, added: [] };
+    const what = tags.length ? `${tags.map(([, , l]) => l).join('·')} 중에는 ` : kind ? `${KIND_LABEL[kind]} 중에는 ` : '';
+    return { reply: `${what}더 넣을 만한 곳을 찾지 못했어요. 다른 종류로 말해 주세요.`, course: null, added: [] };
   }
   const stops = schedule(insertPlaces(course.stops, picked), startTime);
   const end = fmtEnd(stops);
-  const names = picked.map((p) => `'${p.name}'`).join(', ');
+  const names = picked.map((p) => `'${p.name}'(${p.label ?? KIND_LABEL[p.kind]}, ${p.addr})`).join(', ');
   return {
     reply: `${names} 추가했어요. 이제 ${stops.length}곳을 도는 코스이고, ${end}쯤 끝나요.${lateSunset(stops)}`,
     course: { ...course, stops },

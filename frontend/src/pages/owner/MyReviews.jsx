@@ -1,8 +1,8 @@
 // 내 가게 별점·리뷰 (관광객이 앱·웹에서 남긴 실제 평가) + Agent 리뷰 분석
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stars } from '../../components/Charts.jsx';
 import Markdown from '../../components/Markdown.jsx';
-import { getMyReviews, getMerchantPlaces, linkMyPlace, analyzeMyReviews } from '../../api/client.js';
+import { getMyReviews, getMerchantPlaces, linkMyPlace, analyzeMyReviews, subscribeMyStore } from '../../api/client.js';
 
 const KIND = { food: '식당', cafe: '카페', indoor: '실내 체험' };
 
@@ -20,7 +20,7 @@ function LinkPlace({ onLinked, current }) {
     <form className="row" style={{ gap: 8, flexWrap: 'wrap' }} onSubmit={save}>
       <select className="input" style={{ flex: '1 1 220px' }} value={pick} onChange={(e) => setPick(e.target.value)} aria-label="내 가게">
         <option value="">관광객 평가를 받는 내 가게를 고르세요</option>
-        {places.map((p) => <option key={p.id} value={p.id}>{p.name} · {KIND[p.kind] ?? p.kind}</option>)}
+        {places.map((p) => <option key={p.id} value={p.id}>{p.no ? `#${p.no} ` : ''}{p.name} · {KIND[p.kind] ?? p.kind}</option>)}
       </select>
       <button className="btn primary" type="submit" disabled={!pick}>연결</button>
       {err && <span className="small bad">{err}</span>}
@@ -33,8 +33,30 @@ export default function MyReviews() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [relink, setRelink] = useState(false);
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef(null);
   const load = () => getMyReviews().then(setD).catch((e) => { setErr(e.message); setD(null); });
   useEffect(() => { load(); }, []);
+
+  // 실시간: 내 가게에 새 평가가 오면 알림 + 목록 새로고침, Agent 가 분석을 저장하면 결과 새로고침
+  const placeId = d?.place?.id;
+  useEffect(() => {
+    if (!placeId) return undefined;
+    const off = subscribeMyStore((e) => {
+      if (e.placeId && e.placeId !== placeId) return;
+      if (e.type === '평가 등록') {
+        setToast(`새 평가 ${'★'.repeat(e.stars ?? 0)} · ${e.text} — Agent가 곧 분석해요`);
+        load();
+      } else if (e.type === '리뷰 분석') {
+        setToast('Agent가 새 리뷰 분석을 저장했어요');
+        load();
+      } else return;
+      clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setToast(''), 6000);
+    });
+    return () => { off(); clearTimeout(toastTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeId]);
 
   const analyze = async () => {
     setBusy(true); setErr('');
@@ -56,12 +78,13 @@ export default function MyReviews() {
   const max = Math.max(1, ...Object.values(s.dist));
   return (
     <section className="grid g2" style={{ alignItems: 'start' }}>
+      {toast && <div className="toast" role="status">{toast}</div>}
       <div className="card stack">
         <div className="head" style={{ marginBottom: 0 }}>
-          <h3>내 가게 별점·리뷰</h3>
+          <h3>내 가게 별점·리뷰 <span className="live" aria-hidden="true" /></h3>
           <button className="btn sm ghost" onClick={() => setRelink(true)}>가게 바꾸기</button>
         </div>
-        <span className="small muted">{d.place.name}{d.regionScore ? ` · ${d.regionScore.name} 지역 점수 ${d.regionScore.score}/10` : ''}</span>
+        <span className="small muted">{d.place.no ? `장소 #${d.place.no} · ` : ''}{d.place.name}{d.regionScore ? ` · ${d.regionScore.name} 지역 점수 ${d.regionScore.score}/10` : ''}</span>
         <div className="row" style={{ gap: 16, alignItems: 'center' }}>
           <div className="score"><b className="num">{s.count ? s.avg.toFixed(1) : '-'}</b><span className="muted">/ 5</span></div>
           <div className="stack" style={{ gap: 2 }}>
@@ -99,7 +122,7 @@ export default function MyReviews() {
             <span className="small muted">{d.analysis.createdAt.slice(5, 16).replace('T', ' ')} · {d.analysis.source === 'gpt' ? 'GPT 분석' : '규칙 기반 분석'}</span>
             <Markdown text={d.analysis.body} />
           </>
-        ) : <p className="small muted">별점과 리뷰를 읽고 강점·개선할 점·다음 할 일을 정리해 드려요. 결과는 저장돼서 다음에 다시 볼 수 있어요.</p>}
+        ) : <p className="small muted">별점과 리뷰를 읽고 강점·개선할 점·다음 할 일을 정리해 드려요. 새 평가가 들어오면 Agent가 자동으로 다시 분석해요.</p>}
       </div>
     </section>
   );

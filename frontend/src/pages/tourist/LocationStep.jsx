@@ -1,7 +1,38 @@
 import { useEffect, useState } from 'react';
 import KakaoMap from '../../components/KakaoMap.jsx';
 import TypeCard from './TypeCard.jsx';
-import { getRegions, nearestRegion } from '../../api/client.js';
+import RegionArt from '../../components/RegionArt.jsx';
+import { getRegions, nearestRegion, regionFromAddress } from '../../api/client.js';
+import { PLACES } from '../../mock/tourist.js';
+
+const SPOT_KIND = { cafe: '카페', spot: '산책', sunset: '노을', food: '식당', indoor: '실내' };
+import { REGION_INFO, fitWith } from '../../regionInfo.js';
+
+// 고른 지역의 특색: 그림 + 해시태그 + 설명 + 갈 만한 곳
+function RegionFeature({ region, profile }) {
+  const info = REGION_INFO[region.id];
+  if (!info) return null;
+  const spots = PLACES.filter((p) => p.region === region.id).sort((a, b) => b.rating - a.rating).slice(0, 4);
+  const fit = fitWith(region.id, profile.code);
+  return (
+    <div key={region.id} className="region-feature" style={{ '--accent': info.accent }}>
+      <RegionArt info={info} title={`${region.name} 풍경 그림`} />
+      <div className="region-body stack" style={{ gap: 8 }}>
+        <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0 }}><span aria-hidden="true">{info.emoji}</span> {region.name}</h3>
+          {fit.length > 0 && <span className="pill good">내 유형과 잘 맞아요 · {fit.join(', ')}</span>}
+        </div>
+        <div className="region-tags">{info.tags.map((t) => <span key={t}>{t}</span>)}</div>
+        <p className="small" style={{ margin: 0 }}>{info.desc}</p>
+        {spots.length > 0 && (
+          <p className="small muted" style={{ margin: 0 }}>
+            갈 만한 곳: {spots.map((p) => `${p.name}(${SPOT_KIND[p.kind]})`).join(' · ')}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // 제주 범위 (백엔드 /regions/nearest 가 받는 범위와 같음)
 const inJeju = (lat, lon) => lat >= 32.9 && lat <= 34.1 && lon >= 125.9 && lon <= 127.1;
@@ -18,6 +49,22 @@ export default function LocationStep({ profile, onDone, onBack }) {
     const r = await nearestRegion(lat, lon);
     setRegion({ ...r, at: { lat, lon } });
     setNote(msg ?? '');
+  };
+
+  // 주소 입력: 서버 주소 검색(카카오) → 가장 가까운 지역, 안 되면 읍·면·동 이름으로
+  const [address, setAddress] = useState('');
+  const [finding, setFinding] = useState(false);
+  const findAddress = async (e) => {
+    e.preventDefault();
+    if (!address.trim()) return;
+    setFinding(true);
+    try {
+      const hit = await regionFromAddress(address);
+      if (hit) { setRegion(hit.region); setNote(`'${hit.label}' 기준으로 ${hit.region.name}에서 시작해요.`); }
+      else setNote('주소에서 제주 지역을 찾지 못했어요. 읍·면·동 이름(예: 애월읍 곽지리)으로 다시 적거나 아래에서 골라 주세요.');
+    } finally {
+      setFinding(false);
+    }
   };
 
   const [locating, setLocating] = useState(false);
@@ -49,11 +96,18 @@ export default function LocationStep({ profile, onDone, onBack }) {
           <h3>어디에서 시작할까요?</h3>
           <button className="btn sm" onClick={useCurrent} disabled={locating || !regions.length}>{locating ? '위치 찾는 중…' : '현재 위치 사용'}</button>
         </div>
+        <form className="chat-input" onSubmit={findAddress} style={{ marginTop: 0 }}>
+          <input className="input" value={address} onChange={(e) => setAddress(e.target.value)}
+            placeholder="주소 입력 (예: 제주시 애월읍 애월해안로 272)" aria-label="출발 주소" />
+          <button className="btn" type="submit" disabled={finding || !address.trim()}>{finding ? '찾는 중…' : '주소로 찾기'}</button>
+        </form>
+        <span className="small muted">또는 지역을 바로 골라 주세요</span>
         <div className="chips">
           {regions.map((r) => (
-            <button key={r.id} type="button" className={`chip ${region?.id === r.id ? 'on' : ''}`} onClick={() => { setRegion(r); setNote(''); }}>{r.name}</button>
+            <button key={r.id} type="button" className={`chip region-chip ${region?.id === r.id ? 'on' : ''}`} style={{ '--accent': REGION_INFO[r.id]?.accent }} onClick={() => { setRegion(r); setNote(''); }}>{r.name}</button>
           ))}
         </div>
+        {region && <RegionFeature region={region} profile={profile} />}
         <KakaoMap
           center={region ?? undefined}
           labels={regions.map((r) => ({ id: r.id, lat: r.lat, lon: r.lon, text: r.name, on: r.id === region?.id }))}
@@ -63,7 +117,7 @@ export default function LocationStep({ profile, onDone, onBack }) {
         {note && <p className="note">{note}</p>}
       </div>
       <div className="row between">
-        <button className="btn ghost" onClick={onBack}>테스트 다시 하기</button>
+        <button className="btn ghost" onClick={onBack}>여행 정보 다시 고르기</button>
         <button className="btn primary" disabled={!region} onClick={() => onDone(region)}>
           {region ? `${region.name}에서 코스 만들기` : '지역을 골라 주세요'}
         </button>

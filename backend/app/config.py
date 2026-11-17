@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     # 기상청 초단기실황 서비스키 (공공데이터포털). 비우면 키 없는 Open-Meteo 로 실시간 날씨를 가져옵니다
     kma_service_key: str = ""
 
+    # 네이버 검색 API (developers.naver.com 애플리케이션). 코스 장소의 대표 사진(이미지 검색)에 사용.
+    # 비우면 사진 없이 이름 링크만 보여 줍니다
+    naver_client_id: str = ""
+    naver_client_secret: str = ""
+
     # 카카오맵(Kakao Local) REST API - 주소 검색, 좌표→행정동 변환
     kakao_rest_api_key: str = ""
 

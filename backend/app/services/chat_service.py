@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from app.data.tourist_data import KIND_LABEL, PLACES, PLACES_BY_ID
 from app.schemas import ChatOut, ChatPatch, CourseOptions
 from app.services import course_session
-from app.services.course_service import plan_course
+from app.services.course_service import edit_course_by_chat, plan_course
 from app.services.course_session import CoursePrefs
 from app.services.llm_service import get_llm_service
 
@@ -32,6 +32,8 @@ SYSTEM_PROMPT = """너는 제주 여행 코스 플래너 Agent야. 사용자가 
  "prefs": {"oceanView": [<바다가 보이는 곳으로 바꿀 장소 종류>],
            "excludePlaces": [<빼 달라고 한 장소의 id (지금 코스 또는 후보 목록의 id)>],
            "excludeKinds": [<통째로 빼 달라고 한 장소 종류>],
+           "kids": true|false|null,
+           "moodCafe": true|false|null,
            "reset": true|false}}
 장소 종류: cafe(카페), spot(산책·관광), sunset(노을 명소), food(저녁 식사), indoor(실내 체험)
 규칙:
@@ -41,10 +43,12 @@ SYSTEM_PROMPT = """너는 제주 여행 코스 플래너 Agent야. 사용자가 
 - "노을은 빼줘", "카페는 안 갈래"처럼 종류를 빼면 prefs.excludeKinds
 - "바다 보이는/오션뷰 카페로" 같은 요청은 prefs.oceanView 에 해당 종류 (종류를 말하지 않으면 cafe)
 - "비/실내"로 바꿔달라고 하면 patch.weather="rain", "맑은 날/야외"면 "clear"
+- "아기/아이/유아와 놀기 좋은 곳"이면 prefs.kids=true (어른끼리로 바꾸면 false)
+- "분좋카/분위기 좋은 카페/감성 카페"면 prefs.moodCafe=true
 - "처음 코스로/원래대로"면 prefs.reset=true
 - 해당 없는 값은 null 또는 빈 배열
 - 위 방법으로 바꿀 수 없는 요청이면 patch·prefs 를 비우고, reply 에서 할 수 있는 요청
-  (해산물, 장소 줄이기/빼기, 바다 보이는 곳, 실내 코스)을 안내해.
+  (해산물, 장소 줄이기/빼기, 바다 보이는 곳, 실내 코스, 아이와 가기 좋은 곳, 분위기 좋은 카페)을 안내해.
 - reply 에서 구체적인 새 장소 이름은 지어내지 마. 서버가 실제 바뀐 장소를 덧붙여 줘."""
 
 
@@ -58,11 +62,14 @@ class Intent:
     exclude_ids: set[str] = field(default_factory=set)
     exclude_kinds: set[str] = field(default_factory=set)
     reset: bool = False
+    kids: bool | None = None
+    mood_cafe: bool | None = None
 
     @property
     def empty(self) -> bool:
         return (self.seafood is None and not self.remove and self.weather is None and not self.reset
-                and not self.ocean_kinds and not self.exclude_ids and not self.exclude_kinds)
+                and not self.ocean_kinds and not self.exclude_ids and not self.exclude_kinds
+                and self.kids is None and self.mood_cafe is None)
 
 
 def _josa(word: str, pair: str) -> str:
@@ -93,6 +100,11 @@ def _kinds_in(message: str) -> set[str]:
 def _rule_based(message: str, current_ids: list[str]) -> Intent:
     if re.search(r"원래대로|처음 ?코스|초기화", message):
         return Intent(reply="처음 코스로 되돌릴게요.", reset=True, seafood=False)
+    if re.search(r"아기|아이(와|랑|들|가|를|\s|$)|애기|유아|어린이|키즈", message):
+        return Intent(reply="아이와 함께 가기 좋은 곳(얕은 해변·평탄한 산책로·실내 체험·가족 식당) 위주로 바꿀게요. 노을 명소는 산책·체험으로 대신해요.",
+                      kids=True)
+    if re.search(r"분좋카|분위기 ?(좋은|있는) ?카페|감성 ?카페|예쁜 ?카페", message):
+        return Intent(reply="분위기 좋은 카페로 바꿀게요.", mood_cafe=True)
     if re.search(r"바다 ?(가 )?보이|오션 ?뷰|바다 ?전망|바다 ?뷰", message):
         kinds = _kinds_in(message) - {"spot", "indoor"} or {"cafe"}
         return Intent(reply=f"{_josa(_label(kinds), '을를')} 바다가 보이는 곳으로 골라 볼게요.", ocean_kinds=kinds)
@@ -100,7 +112,7 @@ def _rule_based(message: str, current_ids: list[str]) -> Intent:
     if named and re.search(r"빼|말고|제외|바꿔|싫", message):
         names = ", ".join(PLACES_BY_ID[pid]["name"] for pid in named)
         return Intent(reply=f"{_josa(names, '을를')} 빼고 다시 골라 볼게요.", exclude_ids=set(named))
-    if re.search(r"해산물|회 |회로|바다 ?음식", message):
+    if re.search(r"해산물|회 |회로|회를|회가|회 ?먹|횟집|물회|바다 ?음식", message):
         return Intent(reply="저녁을 해산물 식당으로 바꿀게요. 외식업 메뉴 매출에서 해산물 비중이 높은 곳 위주로 골라요.",
                       seafood=True)
     if re.search(r"줄여|하나 ?빼|1곳|한 ?곳", message):
@@ -149,6 +161,8 @@ def _from_llm(data: dict) -> Intent | None:
         exclude_ids=_str_set(prefs.get("excludePlaces"), PLACES_BY_ID),
         exclude_kinds=_str_set(prefs.get("excludeKinds"), KINDS),
         reset=prefs.get("reset") is True,
+        kids=prefs.get("kids") if isinstance(prefs.get("kids"), bool) else None,
+        mood_cafe=prefs.get("moodCafe") if isinstance(prefs.get("moodCafe"), bool) else None,
     )
 
 
@@ -170,6 +184,10 @@ def _new_prefs(old: CoursePrefs, it: Intent) -> CoursePrefs:
     p.ocean_kinds |= it.ocean_kinds
     p.exclude_ids |= it.exclude_ids
     p.exclude_kinds |= it.exclude_kinds
+    if it.kids is not None:
+        p.kids = it.kids
+    if it.mood_cafe is not None:
+        p.mood_cafe = it.mood_cafe
     return p
 
 
@@ -182,6 +200,10 @@ def _no_change_reply(it: Intent, current_ids: list[str]) -> str:
         return "말씀하신 장소는 지금 코스에 없거나, 대신 넣을 후보가 없어 코스가 그대로예요."
     if it.seafood:
         return "지금 코스의 식사가 이미 해산물 식당이에요."
+    if it.kids:
+        return "지금 코스가 이미 아이와 함께 가기 좋은 곳들이에요."
+    if it.mood_cafe:
+        return "지금 코스의 카페가 이미 분위기 좋은 곳이거나, 코스에 카페가 없어요. \"카페 하나 추가해줘\"라고 해 보세요."
     if it.weather == "rain":
         return "지금 코스가 이미 실내 위주예요."
     return "요청을 반영해 봤지만 지금 조건에서는 바뀌는 장소가 없어요."
@@ -202,9 +224,22 @@ def _diff_text(before: list[str], after: list[str]) -> str:
     return f"(바뀐 곳: {parts[0]})"
 
 
-def chat_course(message: str, user_id: str) -> ChatOut:
+def chat_course(message: str, user_id: str, stop_ids: list[str] | None = None,
+                history: list[tuple[str, str]] | None = None) -> ChatOut:
     session = course_session.get(user_id)
-    current_ids = list(session.last_stop_ids)
+    # 화면이 보낸 지금 코스가 있으면 그걸 기준으로 (대화로 넣은 장소까지 포함)
+    current_ids = [i for i in (stop_ids or []) if i in PLACES_BY_ID] or list(session.last_stop_ids)
+
+    # 1) GPT: 사용자 말을 그대로 넘기고, 고친 코스 전체를 받습니다
+    if session.last_req is not None:
+        edited = edit_course_by_chat(message, history or [], current_ids, session.last_req)
+        if edited is not None:
+            reply, course = edited
+            if course is not None:
+                course_session.save_plan(user_id, session.last_req, [s.id for s in course.stops])
+            return ChatOut(reply=reply, course=course)
+
+    # 2) GPT 가 꺼져 있거나 실패하면: 정해진 수정(patch·prefs)으로 해석
     it = _understand(message, current_ids)
     if it.empty:
         return ChatOut(reply=it.reply, patch=None)

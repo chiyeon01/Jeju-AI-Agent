@@ -8,13 +8,11 @@ import '../../api/weather.dart';
 import '../../data/tourist_mock.dart';
 import '../../theme.dart';
 import '../../widgets/kakao_map.dart';
+import '../../widgets/place_link.dart';
 import '../../widgets/ui.dart';
 
-// GPT 로 짠 코스면 자유로운 요청 예시, 아니면 규칙 기반이 알아듣는 예시
-List<String> _suggestFor(Course? c) => c?.source == 'gpt'
-    ? const ['더 여유롭게 바꿔줘', '사진 찍기 좋은 곳 넣어줘', '저녁은 해산물로', '18시에 출발할래']
-    // 백엔드 대화는 해산물·줄이기·실내만 바꾸고, "더 넣어줘"류는 앱에서 직접 처리합니다 (api/course_edit.dart)
-    : const ['1곳 더 넣어줘', '카페 하나 추가해줘', '저녁은 해산물로 바꿔줘', '1곳 줄여줘', '실내로 바꿔줘'];
+// 대화로 코스 고치기 예시 (백엔드 대화 Agent 가 아이 동반·분위기 좋은 카페·해산물로 알아듣습니다)
+const _suggest = ['아기가 놀기 좋은 곳으로 수정해줘.', '분좋카를 원해.', '회를 먹고싶어.'];
 
 class CourseStep extends StatefulWidget {
   const CourseStep({super.key, required this.profile, required this.origin, required this.onDone, required this.onBack});
@@ -37,6 +35,12 @@ class _CourseStepState extends State<CourseStep> {
   LiveWeather? _live;
   HubData? _hub;
   List<String> _added = const []; // 대화로 추가한 장소 id (백엔드가 코스를 다시 짜도 유지)
+  final Set<String> _seen = {}; // 지금까지 보여 준 장소 ("다른 코스 보기"에서 피함)
+
+  void _show(Course c) {
+    _course = c;
+    _seen.addAll(c.stops.map((s) => s.place.id));
+  }
 
   @override
   void initState() {
@@ -84,7 +88,7 @@ class _CourseStepState extends State<CourseStep> {
     }
     if (!mounted || my != _req) return;
     setState(() {
-      _course = c;
+      _show(c);
       final first = _msgs.length == 1;
       final text = c.summary.isNotEmpty
           ? '${c.summary} 바꾸고 싶은 점을 편하게 말해 주세요.'
@@ -114,29 +118,29 @@ class _CourseStepState extends State<CourseStep> {
         setState(() {
           _msgs.add((false, ai.reply));
           if (ai.course != null) {
-            _course = ai.course;
+            _show(ai.course!);
             _startTime = ai.startTime ?? _startTime;
           }
         });
         return;
       }
-      // 백엔드가 못 하는 "늘려줘·추가해줘" 는 앱에서 장소를 골라 넣습니다
-      final add = addToCourse(m, course, startTime: _startTime, rain: _opts.weather == 'rain', hub: _hub);
-      if (add != null) {
+      // 서버 Agent(GPT)에게 사용자 말을 그대로 보내고, 고친 코스를 받습니다
+      final r = await chatCourse(m, stopIds: [for (final s in course.stops) s.place.id], history: history);
+      if (!mounted) return;
+      final edited = r.course;
+      if (edited != null) {
+        final withHub = applyHub([for (final s in edited.stops) s.place], _hub);
         setState(() {
-          _msgs.add((false, add.reply));
-          if (add.course != null) {
-            _course = add.course;
-            _added = [..._added, ...add.added];
-          }
+          _added = const [];
+          _msgs.add((false, r.reply));
+          _show(Course(edited.weather, [for (var i = 0; i < edited.stops.length; i++) Stop(withHub[i], edited.stops[i].at, edited.stops[i].move)],
+              summary: course.summary, source: edited.source));
         });
         return;
       }
-      final r = await chatCourse(m);
-      if (!mounted) return;
-      setState(() => _msgs.add((false, r.reply)));
       final p = r.patch;
       if (p != null) {
+        setState(() => _msgs.add((false, r.reply)));
         // 줄이기는 대화로 추가한 장소부터 뺍니다
         var remove = p.removeCount;
         if (remove < 0) _added = const []; // "처음 코스로 되돌려줘"
@@ -146,9 +150,46 @@ class _CourseStepState extends State<CourseStep> {
         }
         _opts = _opts.copyWith(weather: p.weather, seafood: p.seafood, removeCount: _opts.removeCount + remove);
         _plan();
+        return;
       }
+      // GPT 가 없는 서버: "늘려줘·미술관 넣어줘" 는 앱에서 장소를 골라 넣습니다
+      final add = addToCourse(m, course, startTime: _startTime, rain: _opts.weather == 'rain', hub: _hub);
+      setState(() {
+        if (add == null) {
+          _msgs.add((false, r.reply));
+          return;
+        }
+        _msgs.add((false, add.reply));
+        if (add.course != null) {
+          _show(add.course!);
+          _added = [..._added, ...add.added];
+        }
+      });
     } catch (e) {
       if (mounted) setState(() => _msgs.add((false, '지금은 답하지 못했어요. 잠시 뒤 다시 말해 주세요.')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  // 다른 코스 보기: 지금까지 본 장소를 피해서 Agent(GPT)가 새로 고릅니다
+  Future<void> _another() async {
+    if (_course == null || _busy) return;
+    setState(() => _busy = true);
+    _added = const [];
+    final my = ++_req;
+    try {
+      final c = await alternativeCourse(profile: widget.profile, origin: widget.origin, opts: _opts, avoid: _seen);
+      final withHub = applyHub([for (final s in c.stops) s.place], _hub);
+      if (!mounted || my != _req) return;
+      setState(() {
+        _show(Course(c.weather, [for (var i = 0; i < c.stops.length; i++) Stop(withHub[i], c.stops[i].at, c.stops[i].move)],
+            summary: c.summary, source: c.source));
+        _startTime = widget.profile.startTime;
+        _msgs.add((false, '${c.summary.isNotEmpty ? c.summary : '다른 코스를 찾았어요.'} 바꾸고 싶은 점을 말해 주세요.'));
+      });
+    } catch (_) {
+      if (mounted) setState(() => _msgs.add((false, '다른 코스를 찾지 못했어요. 잠시 뒤 다시 눌러 주세요.')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -157,8 +198,6 @@ class _CourseStepState extends State<CourseStep> {
   @override
   Widget build(BuildContext context) {
     final indoorAsked = _opts.weather == 'rain' && _live?.code != 'rain';
-    final hubNote = hubLine(_hub);
-    final hubOn = _hub != null && !_hub!.isEmpty;
     final left = VStack(children: [
       Wrap(spacing: 12, runSpacing: 10, alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
         VStack(gap: 2, cross: CrossAxisAlignment.start, children: [
@@ -172,19 +211,9 @@ class _CourseStepState extends State<CourseStep> {
               ? '${_live!.line}${indoorAsked ? ' · 요청대로 실내 위주' : ''}'
               : '실시간 날씨를 불러오지 못했어요. 날씨와 상관없이 짠 코스예요'),
       if (_ready && _live == null) Align(alignment: Alignment.centerLeft, child: Btn('날씨 다시 불러오기', small: true, ghost: true, onPressed: _start)),
-      if (hubNote != null) T.small(hubNote, color: C.muted),
       Between(
-        left: T.small(
-            _course?.source == 'gpt'
-                ? 'AI(GPT) 코스 · 반영: ${['성향', if (_live != null) '실시간 날씨', if (hubOn) '데이터허브 혼잡도·방문객'].join(', ')}'
-                : '데이터 점수로 짠 코스예요${_live != null ? ' · 실시간 날씨 반영' : ''}',
-            color: C.muted),
-        right: Btn('다른 코스 보기', small: true, ghost: true, onPressed: _course == null || _busy
-                ? null
-                : () {
-                    _added = const [];
-                    _plan();
-                  }),
+        left: T.small('${_course?.source == 'gpt' ? 'AI가 고른 코스예요' : '내 성향에 맞춰 짠 코스예요'} · 이름을 누르면 네이버 지도로 열려요', color: C.muted),
+        right: Btn(_busy && _course != null ? '찾는 중…' : '다른 코스 보기', small: true, ghost: true, onPressed: _course == null || _busy ? null : _another),
       ),
       AppCard(
         child: _course == null
@@ -202,7 +231,7 @@ class _CourseStepState extends State<CourseStep> {
         path: true,
         markers: [for (final s in _course?.stops ?? const <Stop>[]) MapMarker(s.place.lat, s.place.lon, s.place.name)],
       ),
-      ChatPanel(title: '대화로 코스 고치기', messages: _msgs, suggestions: _suggestFor(_course), onSend: _send, busy: _busy || _course == null, hint: '예: 카페는 바다 보이는 곳으로'),
+      ChatPanel(title: '대화로 코스 고치기', messages: _msgs, suggestions: _suggest, onSend: _send, busy: _busy || _course == null, hint: '예: 카페는 바다 보이는 곳으로'),
       Between(
         left: Align(alignment: Alignment.centerLeft, child: Btn('위치 다시 고르기', ghost: true, onPressed: widget.onBack)),
         right: Btn('여행 끝, 평가하기', primary: true, onPressed: _course == null ? null : () => widget.onDone(_course!, _live)),
@@ -228,14 +257,10 @@ class _StopRow extends StatelessWidget {
           child: VStack(gap: 4, children: [
             if (!first) T.muted('이동 약 ${stop.move}분'),
             Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              Text(p.name, style: tx(weight: FontWeight.w700)),
-              Pill(kindLabel[p.kind] ?? p.kind),
+              PlaceLink(p.name),
+              ...placeMeta(p.name, kind: p.kind, label: p.label, addr: p.addr),
             ]),
-            for (final (src, text) in [if (stop.why != null) ('AI', stop.why!), ...p.reasons].take(2))
-              Text.rich(TextSpan(children: [
-                TextSpan(text: '$src  ', style: tx(size: 13, weight: FontWeight.w600, color: C.skyDeep)),
-                TextSpan(text: keepAll(text), style: tx(size: 13, color: C.muted)),
-              ])),
+            PlacePhoto(p.name),
           ]),
         ),
       ]),

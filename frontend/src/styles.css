@@ -212,3 +212,23 @@ ul.list .btn.on { background: var(--mist); }
 .stars-bar { display: grid; grid-template-columns: 28px 1fr 32px; align-items: center; gap: 8px; font-size: .8rem; }
 .stars-bar .track { height: 8px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
 .stars-bar .fill { height: 100%; background: var(--sky-deep); }
+
+/* 출발 지역 특색 카드 */
+.region-chip::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent, var(--sky)); margin-right: 6px; vertical-align: 1px; }
+.region-chip.on { background: var(--accent, var(--sky)); border-color: var(--accent, var(--sky)); color: #fff; }
+.region-chip.on::before { background: #fff; }
+.region-feature { border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 14px; overflow: hidden; background: var(--surface); animation: region-in .35s ease-out; }
+.region-art { width: 100%; height: auto; aspect-ratio: 320 / 125; max-height: 200px; display: block; }
+.region-body { padding: 14px 16px; }
+.region-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.region-tags span { font-size: .8rem; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 999px; padding: 2px 10px; }
+@keyframes region-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .region-feature { animation: none; } }
+
+/* 장소 이름 링크 · 대표 사진 */
+.place-link { font-weight: 700; color: var(--ink); text-decoration: none; border-bottom: 1px dashed var(--sky-deep); }
+.place-link:hover, .place-link:focus-visible { color: var(--sky-deep); }
+.place-link .ext { font-size: .75em; margin-left: 3px; color: var(--sky-deep); }
+.place-photo { display: block; width: 120px; height: 80px; border-radius: 10px; overflow: hidden; background: var(--surface-2); }
+.place-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.toast { position: fixed; right: 16px; bottom: 16px; z-index: 50; max-width: min(360px, calc(100vw - 32px)); background: var(--ink); color: #fff; border-radius: 12px; padding: 12px 14px; font-size: .9rem; box-shadow: 0 8px 24px rgba(0,0,0,.2); animation: region-in .3s ease-out; }

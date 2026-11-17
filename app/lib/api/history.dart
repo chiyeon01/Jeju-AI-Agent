@@ -20,11 +20,14 @@ class ProfileRecord {
 }
 
 class CourseRecord {
-  const CourseRecord({required this.at, required this.origin, required this.type, this.weather, required this.source, required this.stops});
+  const CourseRecord({required this.at, required this.origin, required this.type, this.weather, this.trip = '', required this.source, required this.stops});
   final DateTime at;
   final String origin, type, source;
   final String? weather;
-  final List<({String id, String name, String kind, String at})> stops;
+
+  /// 동행 · 이동 수단 · 시작~끝 시각
+  final String trip;
+  final List<({String id, String name, String kind, String at, double? lat, double? lon})> stops;
 }
 
 class ReviewRecord {
@@ -78,10 +81,15 @@ Future<History> loadHistory(String userId) async {
           origin: '${x['origin'] ?? ''}',
           type: '${x['type'] ?? ''}',
           weather: x['weather'] as String?,
+          trip: '${x['trip'] ?? ''}',
           source: '${x['source'] ?? 'rule'}',
           stops: [
             for (final s in (x['stops'] as List?) ?? const [])
-              if (s is Map) (id: '${s['id']}', name: '${s['name']}', kind: '${s['kind']}', at: '${s['at'] ?? ''}'),
+              if (s is Map)
+                (
+                  id: '${s['id']}', name: '${s['name']}', kind: '${s['kind']}', at: '${s['at'] ?? ''}',
+                  lat: (s['lat'] as num?)?.toDouble(), lon: (s['lon'] as num?)?.toDouble(),
+                ),
           ],
         ),
     ],
@@ -100,8 +108,11 @@ Future<void> recordCourse(String userId, {required Course course, required Regio
       'origin': origin.name,
       'type': '${profile.name} (${profile.code})',
       'weather': live == null ? null : '${live.icon} ${live.label} ${live.temp.round()}°C',
+      'trip': [profile.companion, profile.transport, if (profile.endTime != null) '${profile.startTime}~${profile.endTime}'].join(' · '),
       'source': course.source,
-      'stops': [for (final s in course.stops) {'id': s.place.id, 'name': s.place.name, 'kind': s.place.kind, 'at': s.at}],
+      'stops': [
+        for (final s in course.stops) {'id': s.place.id, 'name': s.place.name, 'kind': s.place.kind, 'at': s.at, 'lat': s.place.lat, 'lon': s.place.lon}
+      ],
     });
 
 Future<void> recordReviews(String userId, List<({String placeId, String name, int stars, String text})> items) async {

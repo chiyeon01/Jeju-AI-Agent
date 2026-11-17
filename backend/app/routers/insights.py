@@ -1,7 +1,9 @@
 # ─────────────────────────────────────────────
 # 실데이터 인사이트 · 실시간 날씨
 #  GET  /weather/now?lat&lon                 로그인한 누구나 (서버가 대신 날씨를 가져옴)
+#  GET  /places/photo?q=                     장소 대표 사진 (네이버 이미지 검색, 키 있을 때)
 #  GET  /admin/insights/regions              지역 점수 0~10 (요청마다 새로 계산)
+#  GET  /admin/insights/places              장소(고유 번호)별 평가·사장님 연결·최근 분석
 #  GET  /admin/reports  · POST /admin/reports  Agent 지역 보고서 목록 · 새로 만들기
 #  GET  /owner/places                        가게 연결용 장소 목록
 #  GET  /owner/place  · PUT /owner/place      내 가게와 연결된 장소
@@ -17,6 +19,7 @@ from pydantic import BaseModel
 from app import db
 from app.security import current_user, require_roles
 from app.services import insight_service as svc
+from app.services.photo_service import place_photo
 from app.services.weather_service import live_weather
 
 router = APIRouter(tags=["insights"])
@@ -30,9 +33,21 @@ def weather_now(lat: float = Query(..., ge=32, le=35), lon: float = Query(..., g
     return live_weather(lat, lon)
 
 
+@router.get("/places/photo")
+def photo(q: str = Query(..., min_length=1, max_length=60), _: dict = Depends(current_user)) -> dict:
+    """장소 대표 사진 (네이버 이미지 검색 첫 결과). 키가 없거나 결과가 없으면 { photo: null }"""
+    return {"photo": place_photo(q)}
+
+
 @router.get("/admin/insights/regions")
 def region_scores(_: dict = Depends(admin)) -> dict:
     return svc.region_scores()
+
+
+@router.get("/admin/insights/places")
+def place_overview(_: dict = Depends(admin)) -> list[dict]:
+    """장소 고유 번호별 평가 수·평균·사장님 연결·최근 Agent 분석"""
+    return svc.place_overview()
 
 
 @router.get("/admin/reports")
@@ -59,7 +74,7 @@ def my_place(user: dict = Depends(merchant)) -> dict:
     pid = db.get_store_place(user["id"])
     p = svc.PLACES_BY_ID.get(pid) if pid else None
     return {"placeId": pid if p else None,
-            "place": {k: p[k] for k in ("id", "name", "region", "kind")} if p else None}
+            "place": {**{k: p[k] for k in ("id", "name", "region", "kind")}, "no": db.place_no(p["id"])} if p else None}
 
 
 @router.put("/owner/place")

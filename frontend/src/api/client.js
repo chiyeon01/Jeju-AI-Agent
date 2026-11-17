@@ -144,13 +144,40 @@ function km(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+// 시작·끝 시각 → 백엔드 hours (예전 서버는 endTime 을 모르므로 함께 보냅니다)
+const toMin = (hhmm) => { const [h, m] = String(hhmm || '0:0').split(':').map(Number); return h * 60 + m; };
+export function tripHours(startTime, endTime) {
+  if (!endTime) return undefined;
+  let d = toMin(endTime) - toMin(startTime);
+  if (d <= 0) d += 24 * 60;
+  return Math.max(1, Math.min(12, Math.ceil(d / 60)));
+}
+
+function courseBody({ profile, origin, weather, startTime, removeCount = 0, seafood = false }) {
+  const endTime = profile.endTime;
+  return {
+    profile, regionId: origin.id, startTime, ...(endTime ? { endTime } : {}),
+    hours: tripHours(startTime, endTime) ?? profile.hours, weather, options: { seafood, removeCount },
+  };
+}
+
 /** POST /tourist/course — 코스 플래너 Agent */
-export async function planCourse({ profile, origin, weather, startTime = '15:00', removeCount = 0, seafood = false }) {
-  if (!isMock) {
-    return post('/tourist/course', { profile, regionId: origin.id, startTime, hours: profile.hours, weather, options: { seafood, removeCount } });
-  }
+export async function planCourse(args) {
+  if (!isMock) return post('/tourist/course', courseBody(args));
+  return mockCourse(args);
+}
+
+/** POST /tourist/course/alternative — 다른 코스 보기 (Agent 가 지금까지 본 장소를 피해 새로 고름) */
+export async function alternativeCourse({ avoid = [], ...args }) {
+  if (!isMock) return post('/tourist/course/alternative', { ...courseBody(args), avoid: avoid.slice(-60) });
+  const c = await mockCourse({ ...args, avoid });
+  return { ...c, source: 'rule', summary: '이전에 본 코스와 다른 장소 위주로 다시 골랐어요.' };
+}
+
+async function mockCourse({ profile, origin, weather, startTime = '15:00', removeCount = 0, seafood = false, avoid = [] }) {
   await wait(600);
   const rain = weather === 'rain';
+  const skip = new Set(avoid);
   const near = [...PLACES].sort((a, b) => km(a, origin) - km(b, origin));
   // 가까운 두 곳 중 하나를 무작위로 골라, 같은 지역이어도 매번 같은 코스가 나오지 않게 합니다
   const pick = (kinds, used, pred = () => true) => {
@@ -162,39 +189,109 @@ export async function planCourse({ profile, origin, weather, startTime = '15:00'
   const stops = [];
   for (const kinds of order) {
     const pred = kinds.includes('food') && seafood ? (p) => p.seafood : rain ? (p) => p.indoor : () => true;
-    const p = pick(kinds, used, pred) || pick(kinds, used);
+    const p = pick(kinds, used, (x) => !skip.has(x.id) && pred(x)) || pick(kinds, used, (x) => !skip.has(x.id)) || pick(kinds, used);
     if (p) { used.add(p.id); stops.push(p); }
   }
   const trimmed = stops.slice(0, Math.max(2, stops.length - removeCount));
-  let [h, m] = startTime.split(':').map(Number);
-  let t = h * 60 + m;
-  const fmt = (x) => `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`;
-  return {
-    weather: { code: weather, ...WEATHER[weather] },
-    stops: trimmed.map((p, i) => {
-      // 직선거리(km) × 1.3(도로 보정) ÷ 평균 35km/h + 주차·도보 4분
-      const move = i === 0 ? 0 : Math.max(5, Math.round((km(p, trimmed[i - 1]) * 1.3 / 35) * 60 + 4));
-      t += move;
-      const at = fmt(t);
-      t += p.stay;
-      return { ...p, at, move };
-    }),
-  };
+  let t = toMin(startTime);
+  const end = profile.endTime ? toMin(profile.endTime) + (toMin(profile.endTime) <= t ? 24 * 60 : 0) : null;
+  const fmt = (x) => `${String(Math.floor(x / 60) % 24).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`;
+  const out = [];
+  for (const [i, p] of trimmed.entries()) {
+    // 직선거리(km) × 1.3(도로 보정) ÷ 평균 35km/h + 주차·도보 4분
+    const move = i === 0 ? 0 : Math.max(5, Math.round((km(p, trimmed[i - 1]) * 1.3 / 35) * 60 + 4));
+    if (end != null && out.length >= 2 && t + move + p.stay > end) break;
+    t += move;
+    const at = fmt(t);
+    t += p.stay;
+    out.push({ ...p, at, move });
+  }
+  return { weather: { code: weather, ...WEATHER[weather] }, stops: out };
+}
+
+// ── 장소 링크·대표 사진 ───────────────────────
+/** 장소 이름 → 네이버 검색어. 목록에 있는 장소면 시·읍면을 붙여 한 곳으로 좁힙니다 (예: 제주시 애월읍 봄날카페) */
+export function placeQuery(name) {
+  const p = PLACES.find((x) => x.name === name);
+  if (p?.addr) return `${p.addr.split(' ').slice(0, 2).join(' ')} ${name}`;
+  return /제주|서귀포/.test(name) ? name : `제주 ${name}`;
+}
+
+/** 장소 정보 (읍·면·동, 종류 이름). 목록에 없으면 null */
+export function placeInfo(name) {
+  return PLACES.find((x) => x.name === name) ?? null;
+}
+
+/** 네이버 지도 검색 링크 (가게·위치 이름으로) */
+export function naverPlaceUrl(name) {
+  return `https://map.naver.com/p/search/${encodeURIComponent(placeQuery(name))}`;
+}
+
+const photoCache = new Map();
+/** GET /places/photo?q= → 대표 사진 { thumbnail, image } | null (서버에 네이버 검색 키가 있을 때) */
+export function placePhoto(name) {
+  if (isMock || !name) return Promise.resolve(null);
+  if (!photoCache.has(name)) {
+    photoCache.set(name, get(`/places/photo?q=${encodeURIComponent(placeQuery(name))}`).then((r) => r?.photo ?? null).catch(() => null));
+  }
+  return photoCache.get(name);
+}
+
+// ── 주소로 출발 지역 찾기 ──────────────────────
+// 서버 카카오 주소 검색이 안 되면 읍·면·동 이름으로 지역을 찾습니다
+const ADDRESS_WORDS = [
+  ['aewol', /애월|하귀|곽지|한담|고내|구엄|납읍/],
+  ['hallim', /한림|한경|협재|금능|고산|판포|저지/],
+  ['daejeong', /대정|안덕|모슬포|산방|사계|화순|송악|가파|마라/],
+  ['jungmun', /중문|색달|대포|하원|예래|상예/],
+  ['namwon', /남원|표선|위미|신례|가시리|세화리.*표선|하례/],
+  ['seongsan', /성산|우도|오조|고성|신양|섭지|온평|시흥/],
+  ['gujwa', /구좌|월정|세화|김녕|평대|하도|종달|송당|비자림/],
+  ['jocheon', /조천|함덕|신촌|북촌|선흘|와흘|교래/],
+  ['seogwipo', /서귀포|서귀동|서홍|동홍|토평|보목|법환|강정|천지동|정방|효돈|쇠소깍|이중섭/],
+  ['jeju-city', /제주시|연동|노형|이도|일도|삼도|건입|용담|아라|오라|도두|외도|이호|화북|삼양|봉개|탑동|동문|공항/],
+];
+
+/** 주소 → { region, label } (못 찾으면 null) */
+export async function regionFromAddress(address) {
+  const q = address.trim();
+  if (!q) return null;
+  if (!isMock) {
+    try {
+      const g = await post('/map/geocode', { query: q.includes('제주') ? q : `제주 ${q}` });
+      const it = g?.items?.[0];
+      if (it && it.lat >= 32.9 && it.lat <= 34.1) {
+        const r = await nearestRegion(it.lat, it.lon);
+        return { region: { ...r, at: { lat: it.lat, lon: it.lon } }, label: it.roadAddress || it.address || q };
+      }
+    } catch { /* 아래 이름 찾기로 */ }
+  }
+  const hit = ADDRESS_WORDS.find(([, re]) => re.test(q.replace(/\s/g, '')));
+  if (!hit) return null;
+  const regions = await getRegions();
+  const r = regions.find((x) => x.id === hit[0]);
+  return r ? { region: r, label: q } : null;
 }
 
 /** POST /tourist/course/chat */
-export async function chatCourse(message) {
+export async function chatCourse(message, { stopIds, history = [] } = {}) {
   if (!isMock) {
-    const res = await post('/tourist/course/chat', { message });
+    // 사용자 말 그대로 + 지금 코스 + 앞선 대화를 보내면, 서버의 GPT 가 고친 코스(course)를 돌려줍니다
+    const res = await post('/tourist/course/chat', {
+      message, ...(stopIds ? { stopIds } : {}),
+      history: history.slice(-6).map((m) => ({ from: m.from === 'me' ? 'me' : 'ai', text: m.text })),
+    });
     // 백엔드는 바뀌지 않은 항목을 null 로 보내므로, 값이 있는 항목만 남깁니다 (null 이 날씨를 덮어쓰지 않게)
     const p = Object.fromEntries(Object.entries(res.patch ?? {}).filter(([, v]) => v != null));
-    return { reply: res.reply, patch: Object.keys(p).length ? p : null };
+    return { reply: res.reply, patch: Object.keys(p).length ? p : null, course: res.course ?? null };
   }
   await wait(500);
+  if (/아기|아이(와|랑|들|가|를|\s|$)|애기|유아|어린이|키즈/.test(message)) return { reply: '아이와 함께 가기 좋은 곳 위주로 바꿨어요.', patch: { weather: 'rain' } };
+  if (/분좋카|분위기 ?(좋은|있는) ?카페|감성 ?카페/.test(message)) return { reply: '분위기 좋은 카페로 바꿨어요.', patch: { removeCount: 0 } };
   if (/해산물|회|바다 음식/.test(message)) return { reply: '저녁을 해산물 식당으로 바꿨어요.', patch: { seafood: true } };
   if (/줄여|빼|1곳/.test(message)) return { reply: '마지막 장소 하나를 뺐어요.', patch: { removeCount: 1 } };
   if (/비|실내/.test(message)) return { reply: '실내 위주 코스로 바꿨어요.', patch: { weather: 'rain' } };
-  return { reply: '시연 화면에서는 "해산물로 바꿔줘", "1곳 줄여줘", "실내로 바꿔줘"를 알아들어요.', patch: null };
+  return { reply: '시연 화면에서는 "회를 먹고싶어", "아기가 놀기 좋은 곳으로", "분좋카를 원해"를 알아들어요.', patch: null };
 }
 
 /** GET /tourist/ai/status → { enabled } 서버에 GPT 키가 있고 GPT 중계 API 가 있는지 (없으면 false) */
@@ -323,6 +420,12 @@ export async function getRegionScores() {
   };
 }
 
+/** GET /admin/insights/places → 장소 고유 번호별 평가·사장님 연결·최근 분석 */
+export async function getPlaceOverview() {
+  if (!isMock) return get('/admin/insights/places');
+  return PLACES.map((p, i) => ({ no: i + 1, id: p.id, name: p.name, region: p.region, kind: p.kind, reviews: 0, avgStars: null, owner: false, lastAnalysis: null }));
+}
+
 /** GET /admin/reports → Agent 가 저장한 지역 보고서 목록 */
 export async function getRegionReports() {
   if (!isMock) return get('/admin/reports?limit=20');
@@ -404,13 +507,21 @@ export async function restoreBackup(id) {
  * 실시간 이벤트 구독. WS {eventStreamUrl}?token=... 로 { type, text, at } 를 받습니다.
  * 돌려준 함수를 부르면 구독을 끊습니다.
  */
+function openEvents(onEvent) {
+  const token = loadSession()?.accessToken ?? '';
+  const ws = new WebSocket(`${config.eventStreamUrl}?token=${encodeURIComponent(token)}`);
+  ws.onmessage = (m) => { try { onEvent(JSON.parse(m.data)); } catch { /* 형식 오류 무시 */ } };
+  return () => ws.close();
+}
+
+/** 상권 주인: 내 가게(연결한 장소)에 새 평가·Agent 분석이 생기면 실시간으로 받습니다 */
+export function subscribeMyStore(onEvent) {
+  if (!isMock && config.eventStreamUrl) return openEvents(onEvent);
+  return () => {};
+}
+
 export function subscribeEvents(onEvent) {
-  if (!isMock && config.eventStreamUrl) {
-    const token = loadSession()?.accessToken ?? '';
-    const ws = new WebSocket(`${config.eventStreamUrl}?token=${encodeURIComponent(token)}`);
-    ws.onmessage = (m) => { try { onEvent(JSON.parse(m.data)); } catch { /* 형식 오류 무시 */ } };
-    return () => ws.close();
-  }
+  if (!isMock && config.eventStreamUrl) return openEvents(onEvent);
   const pad = (n) => String(n).padStart(2, '0');
   const t = setInterval(() => {
     const [type, text] = EVENT_SAMPLES[Math.floor(Math.random() * EVENT_SAMPLES.length)];

@@ -1,4 +1,6 @@
 // 내 가게 별점·리뷰 (관광객이 앱·웹에서 남긴 실제 평가) + Agent 리뷰 분석 (React 의 pages/owner/MyReviews.jsx 와 같음)
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../../api/client.dart';
@@ -21,6 +23,10 @@ class _MyReviewsState extends State<MyReviews> {
   String _err = '';
   List<Json> _places = const [];
   String? _pick;
+  String _toast = '';
+  Timer? _toastTimer;
+  void Function()? _off;
+  String? _subPlace;
 
   @override
   void initState() {
@@ -28,12 +34,44 @@ class _MyReviewsState extends State<MyReviews> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  @override
+  void dispose() {
+    _off?.call();
+    _toastTimer?.cancel();
+    super.dispose();
+  }
+
+  // 실시간: 내 가게에 새 평가가 오면 알림 + 목록 새로고침, Agent 가 분석을 저장하면 결과 새로고침
+  void _subscribe(String? placeId) {
+    if (placeId == _subPlace) return;
+    _off?.call();
+    _off = null;
+    _subPlace = placeId;
+    if (placeId == null) return;
+    _off = subscribeMyStore((e) {
+      if (!mounted || (e['placeId'] != null && e['placeId'] != placeId)) return;
+      final String msg;
+      if (e['type'] == '평가 등록') {
+        msg = '새 평가 ${'★' * ((e['stars'] as num?)?.toInt() ?? 0)} · ${e['text'] ?? ''} — Agent가 곧 분석해요';
+      } else if (e['type'] == '리뷰 분석') {
+        msg = 'Agent가 새 리뷰 분석을 저장했어요';
+      } else {
+        return;
+      }
+      setState(() => _toast = msg);
+      _toastTimer?.cancel();
+      _toastTimer = Timer(const Duration(seconds: 6), () => mounted ? setState(() => _toast = '') : null);
+      _load(quiet: true);
+    });
+  }
+
+  Future<void> _load({bool quiet = false}) async {
+    if (!quiet) setState(() => _loading = true);
     try {
       final d = await getMyReviews();
       if (!mounted) return;
       setState(() => _d = d);
+      _subscribe((d?['place'] as Json?)?['id'] as String?);
       if (d == null) await _loadPlaces();
     } catch (e) {
       if (mounted) setState(() => _err = '$e');
@@ -91,7 +129,7 @@ class _MyReviewsState extends State<MyReviews> {
             hint: const T.small('관광객 평가를 받는 내 가게를 고르세요'),
             items: [
               for (final p in _places)
-                DropdownMenuItem(value: p['id'] as String, child: T.small('${p['name']} · ${storeKinds[p['kind']] ?? p['kind']}')),
+                DropdownMenuItem(value: p['id'] as String, child: T.small('${p['no'] != null ? '#${p['no']} ' : ''}${p['name']} · ${storeKinds[p['kind']] ?? p['kind']}')),
             ],
             onChanged: (v) => setState(() => _pick = v),
           ),
@@ -109,14 +147,14 @@ class _MyReviewsState extends State<MyReviews> {
     final reviews = (d['reviews'] as List).cast<Json>();
     final types = (s['byType'] as List).cast<Json>();
     final a = d['analysis'] as Json?;
-    return Grid(cols: 2, children: [
+    final grid = Grid(cols: 2, children: [
       AppCard(
         child: VStack(gap: 10, children: [
           Between(left: const T.h3('내 가게 별점·리뷰'), right: Btn('가게 바꾸기', small: true, ghost: true, onPressed: () {
             setState(() { _relink = true; _pick = (d['place'] as Json)['id']; });
             _loadPlaces();
           })),
-          T.muted('${(d['place'] as Json)['name']}${region != null ? ' · ${region['name']} 지역 점수 ${region['score']}/10' : ''}', size: 13),
+          T.muted('${(d['place'] as Json)['name']}${(d['place'] as Json)['no'] != null ? ' · 장소 #${(d['place'] as Json)['no']}' : ''}${region != null ? ' · ${region['name']} 지역 점수 ${region['score']}/10' : ''}', size: 13),
           Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text(count > 0 ? avg.toStringAsFixed(1) : '-', style: tx(size: 44, weight: FontWeight.w700, color: C.skyDeep, height: 1)),
             const SizedBox(width: 6),
@@ -155,6 +193,18 @@ class _MyReviewsState extends State<MyReviews> {
             const T.muted('별점과 리뷰를 읽고 강점·개선할 점·다음 할 일을 정리해 드려요. 결과는 저장돼서 다음에 다시 볼 수 있어요.', size: 13),
         ]),
       ),
+    ]);
+    if (_toast.isEmpty) return grid;
+    return VStack(children: [
+      Semantics(
+        liveRegion: true,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(color: C.skyInk, borderRadius: BorderRadius.circular(12)),
+          child: T.small(_toast, color: C.surface),
+        ),
+      ),
+      grid,
     ]);
   }
 }

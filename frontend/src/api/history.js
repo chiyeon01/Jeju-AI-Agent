@@ -41,7 +41,8 @@ export function recordCourse(userId, { course, origin, profile, live }) {
       type: profile ? `${profile.name} (${profile.code})` : '',
       weather: live ? `${live.icon} ${live.label} ${Math.round(live.temp)}°C` : null,
       source: course.source ?? 'rule',
-      stops: course.stops.map((s) => ({ id: s.id, name: s.name, kind: s.kind, at: s.at })),
+      trip: profile ? [profile.companion, profile.transport, profile.endTime ? `${profile.startTime}~${profile.endTime}` : null].filter(Boolean).join(' · ') : '',
+      stops: course.stops.map((s) => ({ id: s.id, name: s.name, kind: s.kind, at: s.at, lat: s.lat, lon: s.lon })),
     }),
   });
 }

@@ -22,6 +22,10 @@ class PlaceOut(BaseModel):
     stay: int
     seafood: bool = False
     reasons: list[list[str]]
+    no: int | None = None  # 장소 고유 번호 (1부터)
+    addr: str = ""  # 읍·면·동 (같은 이름의 다른 곳과 구별)
+    label: str | None = None  # 미술관·기념품샵 등 (없으면 kind 이름)
+    tags: list[str] = []
 
 
 class RegionOut(BaseModel):
@@ -81,6 +85,7 @@ class CourseRequest(BaseModel):
     profile: ProfileOut
     regionId: str
     startTime: str = Field("15:00", pattern=r"^\d{1,2}:\d{2}$")
+    endTime: str | None = Field(None, pattern=r"^\d{1,2}:\d{2}$")  # 여행 끝 시각 (있으면 hours 대신 사용)
     hours: int | None = Field(None, ge=1, le=12)
     weather: Literal["clear", "rain"] = "clear"
     options: CourseOptions = Field(default_factory=CourseOptions)
@@ -102,11 +107,25 @@ class WeatherOut(BaseModel):
 class CourseOut(BaseModel):
     weather: WeatherOut
     stops: list[CourseStopOut]
+    summary: str | None = None  # "다른 코스 보기" 때 Agent 가 쓴 한 줄 설명
+    source: str | None = None   # gpt | rule
+
+
+class AlternativeRequest(CourseRequest):
+    """다른 코스 보기: 지금까지 보여 준 코스의 장소 id 를 피해서 새 코스를 짭니다"""
+    avoid: list[str] = Field(default_factory=list, max_length=60)
 
 
 # ── POST /tourist/course/chat ───────────────────
+class ChatTurn(BaseModel):
+    from_: Literal["me", "ai"] = Field(alias="from")
+    text: str
+
+
 class ChatRequest(BaseModel):
     message: str
+    stopIds: list[str] | None = None  # 화면에 보이는 지금 코스 (대화로 넣은 장소까지)
+    history: list[ChatTurn] = []      # 앞선 대화 몇 개 (GPT 문맥용)
 
 
 class ChatPatch(BaseModel):
@@ -118,6 +137,7 @@ class ChatPatch(BaseModel):
 class ChatOut(BaseModel):
     reply: str
     patch: ChatPatch | None = None
+    course: "CourseOut | None" = None  # GPT 가 고친 새 코스 (있으면 화면이 그대로 씁니다)
 
 
 # ── POST /tourist/reviews ───────────────────────

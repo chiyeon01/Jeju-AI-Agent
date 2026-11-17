@@ -6,6 +6,7 @@ import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
 import TouristFlow from './pages/tourist/TouristFlow.jsx';
 import TouristHome from './pages/tourist/TouristHome.jsx';
+import CourseDetail from './pages/tourist/CourseDetail.jsx';
 import MyPage from './pages/me/MyPage.jsx';
 import OwnerDashboard from './pages/owner/OwnerDashboard.jsx';
 import MainConsole from './pages/console/MainConsole.jsx';
@@ -24,6 +25,7 @@ export default function App() {
       <Route path="/signup" element={<Signup />} />
       <Route element={<RequireRole><Shell /></RequireRole>}>
         <Route path="/tourist" element={<RequireRole roles={['USER', 'ADMIN']}><TouristHome /></RequireRole>} />
+        <Route path="/tourist/history/:i" element={<RequireRole roles={['USER', 'ADMIN']}><CourseDetail /></RequireRole>} />
         <Route path="/tourist/new" element={<RequireRole roles={['USER', 'ADMIN']}><TouristFlow /></RequireRole>} />
         <Route path="/me" element={<MyPage />} />
         <Route path="/owner" element={<RequireRole roles={['MERCHANT', 'ADMIN']}><OwnerDashboard /></RequireRole>} />

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import KakaoMap from '../../components/KakaoMap.jsx';
 import {
   getAdminOverview, getAdminData, getAdminSecurity, updateUser, getAdminBackups, requestBackup, restoreBackup, subscribeEvents,
-  getRegionScores, getRegionReports, createRegionReport,
+  getRegionScores, getRegionReports, createRegionReport, getPlaceOverview,
 } from '../../api/client.js';
 import Markdown from '../../components/Markdown.jsx';
 import { ROLE_LABEL } from '../../mock/auth.js';
@@ -22,11 +22,15 @@ function useLoad(fn) {
 function Overview() {
   const [d] = useLoad(getAdminOverview);
   const [scores, setScores] = useState(null);
+  const [places, setPlaces] = useState(null);
   const [events, setEvents] = useState([]);
   const timer = useRef(null);
   // 지역 점수: 30초마다, 그리고 코스 선택·평가 이벤트가 오면 (2초 모아서) 다시 계산
   useEffect(() => {
-    const load = () => getRegionScores().then(setScores).catch(() => {});
+    const load = () => {
+      getRegionScores().then(setScores).catch(() => {});
+      getPlaceOverview().then(setPlaces).catch(() => {});
+    };
     load();
     const id = setInterval(load, 30000);
     const off = subscribeEvents((e) => {
@@ -75,6 +79,24 @@ function Overview() {
             {events.length === 0 && <li><span /><span className="muted">이벤트를 기다리는 중…</span></li>}
             {events.map((e, i) => <li key={`${e.at}-${i}`}><span className="num muted">{e.at}</span><span><b>{e.type}</b> {e.text}</span></li>)}
           </ul>
+        </div>
+      </div>
+      <div className="card">
+        <div className="head"><h3>장소별 평가 (고유 번호)</h3><span className="small muted">평가가 들어오면 사장님 화면에 바로 알리고 Agent가 분석해요</span></div>
+        <div className="table-wrap">
+          <table className="data">
+            <thead><tr><th className="r">번호</th><th>장소</th><th className="r">평가</th><th className="r">평균</th><th>사장님</th><th>최근 Agent 분석</th></tr></thead>
+            <tbody>
+              {(places ?? []).filter((p) => p.reviews > 0 || p.owner).concat((places ?? []).filter((p) => !p.reviews && !p.owner)).slice(0, 30).map((p) => (
+                <tr key={p.id}>
+                  <td className="r num">#{p.no}</td><td>{p.name}</td><td className="r num">{p.reviews}</td>
+                  <td className="r num">{p.avgStars ? `★${p.avgStars}` : '-'}</td>
+                  <td>{p.owner ? <span className="pill good">연결</span> : <span className="muted small">-</span>}</td>
+                  <td className="small muted">{p.lastAnalysis ? fmtAt(p.lastAnalysis.createdAt) : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

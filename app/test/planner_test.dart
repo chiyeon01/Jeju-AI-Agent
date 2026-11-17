@@ -52,7 +52,7 @@ void main() {
     final f = _Fake(() => {'summary': 's', 'stops': [{'id': 'p2', 'why': '바다'}, {'id': 'p1'}]});
     final course = (await planCourseAI(profile: profile, origin: aewol, weather: 'clear', live: null, hub: hub, ask: f.call))!;
     final system = f.calls.single.$2;
-    expect(system, contains('| p2 | 한담 해안 산책로 |'));
+    expect(system, contains('| p2 | 한담해안산책로 |'));
     expect(system, contains('| 높음 | 보통 |'));
     expect(system, contains('2025-06-30 유동인구 기준'));
     expect(system, isNot(contains('21,000')));
@@ -70,7 +70,7 @@ void main() {
     final (purpose, system, user) = f.calls.single;
     expect(purpose, 'course_chat');
     expect(user, '아이랑 가기 좋게');
-    expect(system, contains('1. 15:00 애월 돌담 브런치 (id p1'));
+    expect(system, contains('1. 15:00 봄날카페 (id p1'));
     expect(system, contains('플래너: 코스예요\n여행자: 고마워'));
     expect(r.reply, contains('16시'));
     expect(r.startTime, '16:00');

@@ -2,8 +2,11 @@ import 'package:geolocator/geolocator.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../api/client.dart';
+import '../../data/region_info.dart';
 import '../../data/tourist_mock.dart';
+import '../../theme.dart';
 import '../../widgets/kakao_map.dart';
+import '../../widgets/region_art.dart';
 import '../../widgets/ui.dart';
 import 'tourist_flow.dart';
 
@@ -69,6 +72,36 @@ class _LocationStepState extends State<LocationStep> {
     }
   }
 
+  // 주소 입력: 서버 주소 검색(카카오) → 가장 가까운 지역, 안 되면 읍·면·동 이름으로
+  final _address = TextEditingController();
+  bool _finding = false;
+
+  @override
+  void dispose() {
+    _address.dispose();
+    super.dispose();
+  }
+
+  Future<void> _findAddress() async {
+    final q = _address.text.trim();
+    if (q.isEmpty || _finding) return;
+    setState(() => _finding = true);
+    try {
+      final hit = await regionFromAddress(q);
+      if (!mounted) return;
+      setState(() {
+        if (hit != null) {
+          _region = hit.$1;
+          _note = "'${hit.$2}' 기준으로 ${hit.$1.name}에서 시작해요.";
+        } else {
+          _note = '주소에서 제주 지역을 찾지 못했어요. 읍·면·동 이름(예: 애월읍 곽지리)으로 다시 적거나 아래에서 골라 주세요.';
+        }
+      });
+    } finally {
+      if (mounted) setState(() => _finding = false);
+    }
+  }
+
   void _select(Region r) => setState(() {
         _region = r;
         _note = '';
@@ -80,7 +113,22 @@ class _LocationStepState extends State<LocationStep> {
         AppCard(
           child: VStack(children: [
             Between(left: const T.h3('어디에서 시작할까요?'), right: Btn(_locating ? '위치 찾는 중…' : '현재 위치 사용', small: true, onPressed: _regions.isEmpty || _locating ? null : _useCurrent)),
-            Chips(children: [for (final r in _regions) ChipBtn(r.name, on: _region?.id == r.id, onTap: () => _select(r))]),
+            Row(children: [
+              Expanded(child: AppInput(controller: _address, hint: '주소 입력 (예: 제주시 애월읍 애월해안로 272)', onSubmitted: (_) => _findAddress())),
+              const SizedBox(width: 8),
+              Btn(_finding ? '찾는 중…' : '주소로 찾기', onPressed: _finding || _regions.isEmpty ? null : _findAddress),
+            ]),
+            Chips(children: [for (final r in _regions) ChipBtn(r.name, on: _region?.id == r.id, accent: regionInfo[r.id]?.accent, onTap: () => _select(r))]),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, anim) => FadeTransition(
+                opacity: anim,
+                child: SlideTransition(position: Tween(begin: const Offset(0, .03), end: Offset.zero).animate(anim), child: child),
+              ),
+              child: _region == null || regionInfo[_region!.id] == null
+                  ? const SizedBox.shrink()
+                  : RegionFeature(key: ValueKey(_region!.id), region: _region!, profileCode: widget.profile.code),
+            ),
             KakaoMap(
               lat: _region?.lat ?? 33.38,
               lon: _region?.lon ?? 126.55,
@@ -92,9 +140,57 @@ class _LocationStepState extends State<LocationStep> {
           ]),
         ),
         Between(
-          left: Align(alignment: Alignment.centerLeft, child: Btn('테스트 다시 하기', ghost: true, onPressed: widget.onBack)),
+          left: Align(alignment: Alignment.centerLeft, child: Btn('여행 정보 다시 고르기', ghost: true, onPressed: widget.onBack)),
           right: Btn(_region == null ? '지역을 골라 주세요' : '${_region!.name}에서 코스 만들기',
               primary: true, onPressed: _region == null ? null : () => widget.onDone(_region!)),
         ),
       ]);
+}
+
+const _spotKind = {'cafe': '카페', 'spot': '산책', 'sunset': '노을', 'food': '식당', 'indoor': '실내'};
+
+/// 고른 지역의 특색: 그림 + 해시태그 + 설명 + 갈 만한 곳
+class RegionFeature extends StatelessWidget {
+  const RegionFeature({super.key, required this.region, required this.profileCode});
+  final Region region;
+  final String profileCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final info = regionInfo[region.id]!;
+    final spots = places.where((p) => p.region == region.id).toList()..sort((a, b) => b.rating.compareTo(a.rating));
+    final fit = fitWith(region.id, profileCode);
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: C.line),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(height: 4, color: info.accent),
+        LayoutBuilder(builder: (context, box) => SizedBox(height: (box.maxWidth * 125 / 320).clamp(0, 200), child: RegionArt(info, label: '${region.name} 풍경 그림'))),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+          child: VStack(gap: 8, children: [
+            Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              Text('${info.emoji} ${region.name}', style: tx(size: 17, weight: FontWeight.w700)),
+              if (fit.isNotEmpty) Pill('내 유형과 잘 맞아요 · ${fit.join(', ')}', tone: 'good'),
+            ]),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final t in info.tags)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(color: info.accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(999)),
+                  child: Text(t, style: tx(size: 12, weight: FontWeight.w600, color: info.accent)),
+                ),
+            ]),
+            T.small(info.desc),
+            if (spots.isNotEmpty)
+              T.muted('갈 만한 곳: ${spots.take(4).map((p) => '${p.name}(${_spotKind[p.kind]})').join(' · ')}', size: 13),
+          ]),
+        ),
+      ]),
+    );
+  }
 }

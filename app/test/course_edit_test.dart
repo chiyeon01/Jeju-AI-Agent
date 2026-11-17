@@ -49,4 +49,20 @@ void main() {
     expect(r.course, isNull);
     expect(r.reply, contains('7곳'));
   });
+
+  test('미술관·기념품샵을 말하면 실제 미술관과 기념품샵을 하나씩 넣는다', () {
+    // 애월 출발 코스 (봄날카페 → 한담해안산책로 → 곽지해수욕장)
+    final c = Course('clear', schedule([(byId['p1']!, null), (byId['p2']!, null), (byId['p3']!, null)], '13:00'));
+    final r = addToCourse('그럼 저 근처에 유명한 미술관도 가고싶고 기념품샵도 넣어줘', c, startTime: '13:00')!;
+    final added = [for (final id in r.added) byId[id]!];
+    expect(added.length, 2);
+    expect(added[0].tags, contains('미술관'));
+    expect(added[1].tags, contains('기념품'));
+    expect(r.reply, contains(added[0].addr));
+    // "미술관도" 처럼 짧게 말해도 알아듣는다
+    expect(isAddRequest('미술관도'), isTrue);
+    expect(isAddRequest('근처에 미술관 있으면 좋겠어'), isTrue);
+    final again = addToCourse('미술관도', r.course!, startTime: '13:00')!;
+    expect(byId[again.added.single]!.label, '미술관');
+  });
 }
