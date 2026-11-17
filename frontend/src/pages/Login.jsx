@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth, HOME_BY_ROLE } from '../auth/AuthContext.jsx';
-import { isMock } from '../api/client.js';
-import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '../mock/auth.js';
 
 export default function Login() {
   const { user, login } = useAuth();
@@ -14,12 +12,12 @@ export default function Login() {
 
   if (user) return <Navigate to={HOME_BY_ROLE[user.role]} replace />;
 
-  const submit = async (e, em = email, pw = password) => {
-    e?.preventDefault();
+  const submit = async (e) => {
+    e.preventDefault();
     setBusy(true);
     setError('');
     try {
-      const u = await login(em, pw);
+      const u = await login(email.trim(), password);
       nav(HOME_BY_ROLE[u.role], { replace: true });
     } catch (err) {
       setError(err.message);
@@ -48,17 +46,6 @@ export default function Login() {
         <p className="small muted" style={{ textAlign: 'center', marginTop: 14 }}>
           계정이 없나요? <Link to="/signup">회원가입</Link>
         </p>
-        {isMock && (
-          <div className="demo">
-            <span className="label">시연 계정 (목업 모드 · 비밀번호 {DEMO_PASSWORD})</span>
-            {DEMO_ACCOUNTS.map((a) => (
-              <button key={a.email} type="button" className="btn sm" disabled={busy}
-                      onClick={() => submit(null, a.email, DEMO_PASSWORD)}>
-                {a.label} 계정 · {a.email}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     </main>
   );

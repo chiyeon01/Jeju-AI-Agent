@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useBackHandler } from '../../components/BackButton.jsx';
 import PersonalityTest from './PersonalityTest.jsx';
 import LocationStep from './LocationStep.jsx';
 import CourseStep from './CourseStep.jsx';
@@ -10,6 +11,9 @@ export default function TouristFlow() {
   const [origin, setOrigin] = useState(null);
   const [course, setCourse] = useState(null);
   const go = (n) => { setStep(n); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  // 왼쪽 위 뒤로가기: 2단계 이상이면 이전 단계로
+  const back = useCallback(() => { setStep((s) => Math.max(0, s - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }, []);
+  useBackHandler(step > 0 ? back : null);
 
   return (
     <main className={`page ${step === 2 ? '' : 'narrow'}`}>

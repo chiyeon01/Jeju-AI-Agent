@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 백엔드(FastAPI) 연동 시 필요 -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 출발 지역 "현재 위치 사용" (geolocator) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <application
         android:label="제주잇다"
         android:usesCleartextTraffic="true"

@@ -73,8 +73,12 @@ export async function login(email, password) {
     session = await post('/auth/login', { email, password });
   } else {
     await wait(400);
-    const u = DEMO_ACCOUNTS.find((a) => a.email === email.trim().toLowerCase());
-    if (!u || password !== DEMO_PASSWORD) throw new ApiError(401, 'INVALID_CREDENTIALS', '이메일 또는 비밀번호가 맞지 않아요.');
+    const em = email.trim().toLowerCase();
+    const local = mockAccounts().find((a) => a.email === em);
+    const demo = DEMO_ACCOUNTS.find((a) => a.email === em);
+    const u = local && local.password === password ? local.user : demo && password === DEMO_PASSWORD ? demo : null;
+    if (!u) throw new ApiError(401, 'INVALID_CREDENTIALS', '이메일 또는 비밀번호가 맞지 않아요.');
+    if (u.status === 'PENDING') throw new ApiError(403, 'ACCOUNT_PENDING', '관리자 승인 후 이용할 수 있어요.');
     session = { accessToken: 'mock-access', refreshToken: 'mock-refresh', user: u };
   }
   saveSession(session);
@@ -85,8 +89,19 @@ export async function login(email, password) {
 export async function signup(form) {
   if (!isMock) return (await post('/auth/signup', form)).user;
   await wait(500);
-  if (DEMO_ACCOUNTS.some((a) => a.email === form.email)) throw new ApiError(409, 'EMAIL_TAKEN', '이미 가입된 이메일이에요.');
-  return { id: 'new', email: form.email, name: form.name, role: form.role, status: form.role === 'MERCHANT' ? 'PENDING' : 'ACTIVE' };
+  const list = mockAccounts();
+  if (DEMO_ACCOUNTS.some((a) => a.email === form.email) || list.some((a) => a.email === form.email)) {
+    throw new ApiError(409, 'EMAIL_TAKEN', '이미 가입된 이메일이에요.');
+  }
+  const user = { id: `u-${Date.now()}`, email: form.email, name: form.name, role: form.role, status: form.role === 'MERCHANT' ? 'PENDING' : 'ACTIVE' };
+  try { localStorage.setItem(MOCK_ACCOUNTS, JSON.stringify([...list, { email: form.email, password: form.password, user }])); } catch { /* 저장 불가 */ }
+  return user;
+}
+
+// 목업 모드에서 회원가입한 계정 (이 브라우저에만 저장, 백엔드 모드에서는 쓰지 않음)
+const MOCK_ACCOUNTS = 'jeju-mock-accounts';
+function mockAccounts() {
+  try { return JSON.parse(localStorage.getItem(MOCK_ACCOUNTS) || '[]'); } catch { return []; }
 }
 
 /** GET /auth/me */
@@ -137,7 +152,11 @@ export async function planCourse({ profile, origin, weather, startTime = '15:00'
   await wait(600);
   const rain = weather === 'rain';
   const near = [...PLACES].sort((a, b) => km(a, origin) - km(b, origin));
-  const pick = (kinds, used, pred = () => true) => near.find((p) => kinds.includes(p.kind) && !used.has(p.id) && pred(p));
+  // 가까운 두 곳 중 하나를 무작위로 골라, 같은 지역이어도 매번 같은 코스가 나오지 않게 합니다
+  const pick = (kinds, used, pred = () => true) => {
+    const top = near.filter((p) => kinds.includes(p.kind) && !used.has(p.id) && pred(p)).slice(0, 2);
+    return top[Math.floor(Math.random() * top.length)];
+  };
   const order = rain ? [['cafe'], ['indoor'], ['indoor', 'cafe'], ['food']] : [['cafe'], ['spot'], ['sunset'], ['food']];
   const used = new Set();
   const stops = [];
@@ -165,12 +184,45 @@ export async function planCourse({ profile, origin, weather, startTime = '15:00'
 
 /** POST /tourist/course/chat */
 export async function chatCourse(message) {
-  if (!isMock) return post('/tourist/course/chat', { message });
+  if (!isMock) {
+    const res = await post('/tourist/course/chat', { message });
+    // 백엔드는 바뀌지 않은 항목을 null 로 보내므로, 값이 있는 항목만 남깁니다 (null 이 날씨를 덮어쓰지 않게)
+    const p = Object.fromEntries(Object.entries(res.patch ?? {}).filter(([, v]) => v != null));
+    return { reply: res.reply, patch: Object.keys(p).length ? p : null };
+  }
   await wait(500);
   if (/해산물|회|바다 음식/.test(message)) return { reply: '저녁을 해산물 식당으로 바꿨어요.', patch: { seafood: true } };
   if (/줄여|빼|1곳/.test(message)) return { reply: '마지막 장소 하나를 뺐어요.', patch: { removeCount: 1 } };
   if (/비|실내/.test(message)) return { reply: '실내 위주 코스로 바꿨어요.', patch: { weather: 'rain' } };
   return { reply: '시연 화면에서는 "해산물로 바꿔줘", "1곳 줄여줘", "실내로 바꿔줘"를 알아들어요.', patch: null };
+}
+
+/** GET /tourist/ai/status → { enabled } 서버에 GPT 키가 있고 GPT 중계 API 가 있는지 (없으면 false) */
+export async function aiStatus() {
+  if (isMock || !config.gptRelay) return { enabled: false };
+  try { return await request('GET', '/tourist/ai/status'); } catch { return { enabled: false }; }
+}
+
+/** POST /tourist/ai/json — 프론트 프롬프트를 서버의 GPT 키로 보내고 JSON 을 받습니다 */
+export async function aiJson(purpose, system, user, temperature) {
+  return (await request('POST', '/tourist/ai/json', { purpose, system, user, temperature })).data;
+}
+
+// ── 제주데이터허브 (백엔드 /datahub 경유, 키는 백엔드에만) ──
+// 허브 원본은 백엔드(Main PC)에만 있고, 화면은 백엔드가 가공한 값만 받습니다.
+let hubCache = null;
+/** { crowd: {date, regions:{지역id:{index, vsAveragePct}}} | null, sights: {start, items:[{sightsName, domestic, foreign}]} | null } */
+export function getHubData() {
+  if (isMock) return Promise.resolve({ crowd: null, sights: null });
+  if (!hubCache) {
+    const safe = (p) => request('GET', p).catch(() => null);
+    hubCache = Promise.all([safe('/datahub/crowd'), safe('/datahub/sights')]).then(([crowd, sights]) => {
+      const out = { crowd, sights };
+      if (!crowd && !sights) hubCache = null; // 실패면 다음에 다시 시도
+      return out;
+    });
+  }
+  return hubCache;
 }
 
 /** POST /tourist/reviews */

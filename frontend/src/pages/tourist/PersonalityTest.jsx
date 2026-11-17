@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useBackHandler } from '../../components/BackButton.jsx';
 import { QUESTIONS, COMPANIONS, TRANSPORTS } from '../../mock/tourist.js';
 import { analyzeProfile } from '../../api/client.js';
 
-const SAMPLE = { 0: 'b', 1: 'a', 2: 'b', 3: 'a', 4: 'a', 5: 'a', 6: 'b', 7: 'b', 8: 'a', 9: 'a', 10: 'b', 11: 'a' };
+const SAMPLE = { 0: 'a', 1: 'a', 2: 'b', 3: 'a', 4: 'a' };
 
 export default function PersonalityTest({ onDone }) {
   const [i, setI] = useState(0);
@@ -10,6 +11,9 @@ export default function PersonalityTest({ onDone }) {
   const [extra, setExtra] = useState({ companion: '연인', transport: '렌터카', startTime: '15:00', hours: 5 });
   const [loading, setLoading] = useState(false);
   const total = QUESTIONS.length;
+  // 왼쪽 위 뒤로가기: 이전 문항으로
+  const prev = useCallback(() => setI((n) => Math.max(0, n - 1)), []);
+  useBackHandler(i > 0 ? prev : null);
 
   const choose = (v) => {
     setAnswers((a) => ({ ...a, [i]: v }));

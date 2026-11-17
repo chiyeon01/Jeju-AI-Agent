@@ -3,6 +3,9 @@ import KakaoMap from '../../components/KakaoMap.jsx';
 import TypeCard from './TypeCard.jsx';
 import { getRegions, nearestRegion } from '../../api/client.js';
 
+// 제주 범위 (백엔드 /regions/nearest 가 받는 범위와 같음)
+const inJeju = (lat, lon) => lat >= 32.9 && lat <= 34.1 && lon >= 125.9 && lon <= 127.1;
+
 export default function LocationStep({ profile, onDone, onBack }) {
   const [regions, setRegions] = useState([]);
   const [region, setRegion] = useState(null);
@@ -10,23 +13,31 @@ export default function LocationStep({ profile, onDone, onBack }) {
 
   useEffect(() => { getRegions().then(setRegions); }, []);
 
+  // at: 실제로 고른 좌표 (실시간 날씨를 그 자리 기준으로 가져옵니다)
   const pickAt = async (lat, lon, msg) => {
     const r = await nearestRegion(lat, lon);
-    setRegion(r);
+    setRegion({ ...r, at: { lat, lon } });
     setNote(msg ?? '');
   };
 
+  const [locating, setLocating] = useState(false);
   const useCurrent = () => {
-    const fallback = () => {
-      const r = regions.find((x) => x.id === 'aewol');
+    const fallback = (why) => {
+      setLocating(false);
+      const r = regions.find((x) => x.id === 'aewol') ?? regions[0];
       setRegion(r);
-      setNote('위치를 가져오지 못해 애월읍으로 잡았어요.');
+      setNote(`${why} 애월읍으로 잡았어요. 지도나 지역을 눌러 바꿀 수 있어요.`);
     };
-    if (!navigator.geolocation) return fallback();
+    if (!navigator.geolocation) return fallback('이 브라우저는 위치를 지원하지 않아');
+    setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (p) => pickAt(p.coords.latitude, p.coords.longitude, '현재 위치에서 가장 가까운 지역이에요.'),
-      fallback,
-      { timeout: 5000 },
+      async ({ coords: { latitude: lat, longitude: lon } }) => {
+        setLocating(false);
+        if (!inJeju(lat, lon)) return fallback('지금 위치가 제주 밖이라');
+        await pickAt(lat, lon, '현재 위치에서 가장 가까운 지역이에요.');
+      },
+      (e) => fallback(e.code === 1 ? '위치 권한이 꺼져 있어' : '위치를 가져오지 못해'),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
     );
   };
 
@@ -36,7 +47,7 @@ export default function LocationStep({ profile, onDone, onBack }) {
       <div className="card stack">
         <div className="head" style={{ marginBottom: 0 }}>
           <h3>어디에서 시작할까요?</h3>
-          <button className="btn sm" onClick={useCurrent}>현재 위치 사용</button>
+          <button className="btn sm" onClick={useCurrent} disabled={locating || !regions.length}>{locating ? '위치 찾는 중…' : '현재 위치 사용'}</button>
         </div>
         <div className="chips">
           {regions.map((r) => (

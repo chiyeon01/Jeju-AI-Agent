@@ -1,6 +1,23 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { signup } from '../api/client.js';
+import { useAuth, HOME_BY_ROLE } from '../auth/AuthContext.jsx';
+import BackButton from '../components/BackButton.jsx';
+
+// 백엔드 /auth/signup 규칙과 같게 미리 확인해, 서버의 영어 검증 문구 대신 한국어로 알려 줍니다
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+export function checkSignup(f) {
+  const merchant = f.role === 'MERCHANT';
+  if (!f.name.trim()) return '이름을 입력해 주세요.';
+  if (f.name.trim().length > 50) return '이름은 50자까지 쓸 수 있어요.';
+  if (!EMAIL.test(f.email.trim())) return '이메일 형식이 올바르지 않아요.';
+  if (f.password.length < 8) return '비밀번호는 8자 이상이어야 해요.';
+  if (f.password.length > 128) return '비밀번호는 128자까지 쓸 수 있어요.';
+  if (merchant && !f.storeName.trim()) return '상호를 입력해 주세요.';
+  if (merchant && f.storeName.trim().length > 80) return '상호는 80자까지 쓸 수 있어요.';
+  if (merchant && f.businessNo.replace(/\D/g, '').length !== 10) return '사업자등록번호는 숫자 10자리예요.';
+  return '';
+}
 
 // 관리자 계정은 화면에서 만들 수 없습니다. 관리자가 콘솔에서 직접 만듭니다.
 export default function Signup() {
@@ -8,20 +25,32 @@ export default function Signup() {
   const [error, setError] = useState('');
   const [done, setDone] = useState(null);
   const [busy, setBusy] = useState(false);
+  const { login } = useAuth();
+  const nav = useNavigate();
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const merchant = form.role === 'MERCHANT';
 
   const submit = async (e) => {
     e.preventDefault();
-    if (form.password.length < 8) { setError('비밀번호는 8자 이상이어야 해요.'); return; }
+    const problem = checkSignup(form);
+    if (problem) { setError(problem); return; }
     setBusy(true);
     setError('');
     try {
-      const body = { email: form.email, password: form.password, name: form.name, role: form.role };
-      if (merchant) Object.assign(body, { storeName: form.storeName, businessNo: form.businessNo.replace(/\D/g, '') });
-      setDone(await signup(body));
+      const body = { email: form.email.trim().toLowerCase(), password: form.password, name: form.name.trim(), role: form.role };
+      if (merchant) Object.assign(body, { storeName: form.storeName.trim(), businessNo: form.businessNo.replace(/\D/g, '') });
+      const user = await signup(body);
+      // 관광객은 바로 쓸 수 있으니 가입한 정보로 로그인까지 이어서 합니다
+      if (user.status === 'ACTIVE') {
+        try {
+          const u = await login(body.email, body.password);
+          nav(HOME_BY_ROLE[u.role], { replace: true });
+          return;
+        } catch { /* 로그인만 실패하면 완료 화면에서 직접 로그인하게 둡니다 */ }
+      }
+      setDone(user);
     } catch (err) {
-      setError(err.message);
+      setError(err.code === 'EMAIL_TAKEN' ? '이미 가입된 이메일이에요. 로그인해 주세요.' : err.message);
     } finally {
       setBusy(false);
     }
@@ -29,6 +58,7 @@ export default function Signup() {
 
   return (
     <main className="auth">
+      <div className="auth-back"><BackButton fallback="/login" /></div>
       <div className="card">
         <div className="title"><h1>회원가입</h1></div>
         {done ? (

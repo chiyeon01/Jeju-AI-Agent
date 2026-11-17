@@ -33,14 +33,7 @@ const questions = [
   Question('space', '사진첩에 가장 많이 남기고 싶은 장면은?', Choice('🌊', '아무도 없는 에메랄드 바다'), Choice('🏮', '감성 가득한 골목 상점가')),
   Question('taste', '여행 코스를 짤 때 가장 먼저 정하는 건?', Choice('🍜', '꼭 먹어야 할 식당'), Choice('📸', '꼭 봐야 할 뷰 포인트')),
   Question('style', '여행 전날 밤 나는?', Choice('🗒️', '시간대별 일정표 완성'), Choice('🎲', '대충 방향만 정하고 잔다')),
-  Question('act', '오름이 눈앞에 있다면?', Choice('⛰️', '정상까지 올라가 본다'), Choice('🌾', '아래 억새밭에서 쉬어 간다')),
   Question('space', '저녁 시간을 보낼 곳은?', Choice('🌅', '노을 지는 포구 방파제'), Choice('🍸', '분위기 좋은 시내 루프탑')),
-  Question('taste', '예산이 남는다면 어디에 쓸까?', Choice('🦞', '제철 해산물 코스'), Choice('🚁', '전망 좋은 숙소·체험')),
-  Question('style', '가려던 식당에 웨이팅이 1시간이라면?', Choice('⏱️', '미리 정한 2순위로 이동'), Choice('🚶', '근처를 걷다 끌리는 곳으로')),
-  Question('act', '비 오는 날의 제주라면?', Choice('🏄', '실내 서핑·카트 체험'), Choice('📚', '북카페에서 빗소리 듣기')),
-  Question('space', '숙소를 고른다면?', Choice('🏡', '돌담 있는 시골 독채'), Choice('🏙️', '맛집 많은 시내 호텔')),
-  Question('taste', '친구에게 자랑하고 싶은 건?', Choice('🥘', '현지인만 아는 맛집'), Choice('🖼️', '인생샷 한 장')),
-  Question('style', '코스 중간 1시간이 비면?', Choice('📍', '근처 추천 장소를 바로 찾는다'), Choice('🌿', '그냥 비워 두고 쉰다')),
 ];
 
 const _adj = {'N-P': '노을 감성', 'N-F': '해녀밥상', 'C-P': '골목 사진', 'C-F': '핫플 미식'};
@@ -164,13 +157,27 @@ final regionById = {for (final r in regions) r.id: r};
 /// 장소. kind: cafe | spot | sunset | food | indoor
 class Place {
   const Place(this.id, this.name, this.region, this.kind, this.lat, this.lon,
-      {required this.indoor, required this.rating, required this.stay, this.seafood = false, required this.reasons});
+      {required this.indoor, required this.rating, required this.stay, this.seafood = false, required this.reasons,
+      this.crowd, this.popularity, this.hubReasons = 0});
   final String id, name, region, kind;
   final double lat, lon;
   final bool indoor, seafood;
   final double rating;
   final int stay; // 머무는 시간(분)
   final List<(String, String)> reasons; // (데이터 출처, 근거)
+
+  /// 제주데이터허브 등급 (지역 혼잡도: 낮음/보통/높음, 관광지 인기도: 최상위/상위/보통/한산). 없으면 null
+  final String? crowd, popularity;
+
+  /// reasons 맨 앞에서 허브 숫자가 들어간 근거 개수 (GPT 프롬프트에서는 뺍니다)
+  final int hubReasons;
+
+  Place withHub({String? crowd, String? popularity, required List<(String, String)> hubReasons}) {
+    final kept = [for (final r in reasons) if (!hubReasons.any((h) => h.$1 == r.$1)) r];
+    return Place(id, name, region, kind, lat, lon,
+        indoor: indoor, rating: rating, stay: stay, seafood: seafood,
+        reasons: [...hubReasons, ...kept], crowd: crowd, popularity: popularity, hubReasons: hubReasons.length);
+  }
 
   factory Place.fromJson(Map<String, dynamic> m) => Place(
         m['id'], m['name'], m['region'] ?? '', m['kind'] ?? 'spot', (m['lat'] as num).toDouble(), (m['lon'] as num).toDouble(),

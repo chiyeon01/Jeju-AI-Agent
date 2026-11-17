@@ -2,9 +2,9 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../api/client.dart' as api;
-import '../data/auth_mock.dart';
 import '../main.dart';
 import '../theme.dart';
+import '../widgets/back.dart';
 import '../widgets/ui.dart';
 
 class _AuthFrame extends StatelessWidget {
@@ -19,7 +19,8 @@ class _AuthFrame extends StatelessWidget {
             gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [C.sky, C.sea, C.mist], stops: [0, .35, .75]),
           ),
           child: SafeArea(
-            child: Center(
+            child: Stack(children: [
+              Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: ConstrainedBox(
@@ -37,6 +38,9 @@ class _AuthFrame extends StatelessWidget {
                 ),
               ),
             ),
+              // 회원가입처럼 쌓인 화면이면 왼쪽 위에 뒤로가기
+              if (Navigator.canPop(context)) Positioned(top: 8, left: 8, child: AppBackButton(onPressed: () => Navigator.maybePop(context))),
+            ]),
           ),
         ),
       );
@@ -62,13 +66,13 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  Future<void> _submit([String? email, String? pw]) async {
+  Future<void> _submit() async {
     setState(() {
       _busy = true;
       _error = '';
     });
     try {
-      await widget.auth.login(email ?? _email.text, pw ?? _pw.text);
+      await widget.auth.login(_email.text.trim(), _pw.text);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
@@ -87,22 +91,31 @@ class _LoginPageState extends State<LoginPage> {
           Btn(_busy ? '로그인 중…' : '로그인', primary: true, block: true, onPressed: _busy ? null : _submit),
           Center(
             child: GestureDetector(
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignupPage())),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SignupPage(auth: widget.auth))),
               child: Text('계정이 없나요? 회원가입', style: tx(size: 14, color: C.skyDeep).copyWith(decoration: TextDecoration.underline)),
             ),
           ),
-          if (api.isMock)
-            VStack(gap: 6, children: [
-              const T.label('시연 계정 (목업 모드 · 비밀번호 $demoPassword)'),
-              for (final a in demoAccounts)
-                Btn('${a['label']} 계정 · ${a['email']}', small: true, block: true, onPressed: _busy ? null : () => _submit(a['email'], demoPassword)),
-            ]),
         ],
       );
 }
 
+/// 백엔드 /auth/signup 규칙과 같게 미리 확인합니다 (서버의 영어 검증 문구 대신 한국어로 안내)
+String checkSignup({required String role, required String name, required String email, required String password, String store = '', String biz = ''}) {
+  final merchant = role == 'MERCHANT';
+  if (name.trim().isEmpty) return '이름을 입력해 주세요.';
+  if (name.trim().length > 50) return '이름은 50자까지 쓸 수 있어요.';
+  if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email.trim())) return '이메일 형식이 올바르지 않아요.';
+  if (password.length < 8) return '비밀번호는 8자 이상이어야 해요.';
+  if (password.length > 128) return '비밀번호는 128자까지 쓸 수 있어요.';
+  if (merchant && store.trim().isEmpty) return '상호를 입력해 주세요.';
+  if (merchant && store.trim().length > 80) return '상호는 80자까지 쓸 수 있어요.';
+  if (merchant && biz.replaceAll(RegExp(r'\D'), '').length != 10) return '사업자등록번호는 숫자 10자리예요.';
+  return '';
+}
+
 class SignupPage extends StatefulWidget {
-  const SignupPage({super.key});
+  const SignupPage({super.key, required this.auth});
+  final AuthController auth;
   @override
   State<SignupPage> createState() => _SignupPageState();
 }
@@ -125,12 +138,9 @@ class _SignupPageState extends State<SignupPage> {
 
   Future<void> _submit() async {
     final merchant = _role == 'MERCHANT';
-    if (_name.text.trim().isEmpty || _email.text.trim().isEmpty || (merchant && (_store.text.trim().isEmpty || _biz.text.trim().isEmpty))) {
-      setState(() => _error = '빈 칸을 모두 채워 주세요.');
-      return;
-    }
-    if (_pw.text.length < 8) {
-      setState(() => _error = '비밀번호는 8자 이상이어야 해요.');
+    final problem = checkSignup(role: _role, name: _name.text, email: _email.text, password: _pw.text, store: _store.text, biz: _biz.text);
+    if (problem.isNotEmpty) {
+      setState(() => _error = problem);
       return;
     }
     setState(() {
@@ -138,17 +148,28 @@ class _SignupPageState extends State<SignupPage> {
       _error = '';
     });
     try {
+      final email = _email.text.trim().toLowerCase();
       final u = await api.signup({
-        'email': _email.text.trim(),
+        'email': email,
         'password': _pw.text,
         'name': _name.text.trim(),
         'role': _role,
         if (merchant) 'storeName': _store.text.trim(),
         if (merchant) 'businessNo': _biz.text.replaceAll(RegExp(r'\D'), ''),
       });
-      setState(() => _done = u);
+      // 관광객은 바로 쓸 수 있으니 가입한 정보로 로그인까지 이어서 합니다
+      if (u.status == 'ACTIVE') {
+        try {
+          await widget.auth.login(email, _pw.text);
+          if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+          return;
+        } catch (_) {
+          // 로그인만 실패하면 완료 화면에서 직접 로그인하게 둡니다
+        }
+      }
+      if (mounted) setState(() => _done = u);
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = e is api.ApiError && e.code == 'EMAIL_TAKEN' ? '이미 가입된 이메일이에요. 로그인해 주세요.' : '$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

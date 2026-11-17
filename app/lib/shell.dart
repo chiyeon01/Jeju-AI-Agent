@@ -10,6 +10,7 @@ import 'pages/console/main_console.dart';
 import 'pages/owner/owner_dashboard.dart';
 import 'pages/tourist/tourist_flow.dart';
 import 'theme.dart';
+import 'widgets/back.dart';
 import 'widgets/ui.dart';
 
 class _Menu {
@@ -41,13 +42,38 @@ class _ShellState extends State<Shell> {
   late int _i = _home;
 
   @override
+  void initState() {
+    super.initState();
+    backController.addListener(_onBackChanged);
+  }
+
+  @override
+  void dispose() {
+    backController.removeListener(_onBackChanged);
+    super.dispose();
+  }
+
+  void _onBackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// 뒤로가기 순서: 화면 안 단계 → 첫 화면(메뉴) → 없음
+  VoidCallback? get _back {
+    final inner = backController.current;
+    if (inner != null) return inner;
+    if (_i != _home) return () => setState(() => _i = _home);
+    return null;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width > 720;
     final many = _items.length > 1;
+    final back = _back;
     return PopScope(
-      canPop: _i == _home,
+      canPop: back == null,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) setState(() => _i = _home); // 안드로이드 뒤로 가기 → 첫 화면
+        if (!didPop) _back?.call(); // 안드로이드 뒤로 가기도 왼쪽 위 버튼과 같게
       },
       child: Scaffold(
         appBar: PreferredSize(
@@ -66,6 +92,8 @@ class _ShellState extends State<Shell> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Row(children: [
+                          AppBackButton(onPressed: back),
+                          const SizedBox(width: 4),
                           Container(
                             width: 22,
                             height: 22,
