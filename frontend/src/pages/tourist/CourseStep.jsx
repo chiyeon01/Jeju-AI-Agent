@@ -15,7 +15,9 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
   useEffect(() => {
     let alive = true;
     setCourse(null);
-    planCourse({ profile, origin, startTime: profile.startTime, ...opts }).then((c) => alive && setCourse(c));
+    planCourse({ profile, origin, startTime: profile.startTime, ...opts })
+      .then((c) => alive && setCourse(c))
+      .catch((e) => alive && setMsgs((x) => [...x, { from: 'ai', text: `코스를 만들지 못했어요. ${e.message || ''}`.trim() }]));
     return () => { alive = false; };
   }, [opts, profile, origin]);
 
@@ -26,9 +28,24 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
     if (!message) return;
     setText('');
     setMsgs((x) => [...x, { from: 'me', text: message }]);
-    const res = await chatCourse(message);
+    let res;
+    try {
+      res = await chatCourse(message);
+    } catch (e) {
+      setMsgs((x) => [...x, { from: 'ai', text: `요청을 처리하지 못했어요. ${e.message || ''}`.trim() }]);
+      return;
+    }
     setMsgs((x) => [...x, { from: 'ai', text: res.reply }]);
-    if (res.patch) setOpts((o) => ({ ...o, ...res.patch, removeCount: (o.removeCount || 0) + (res.patch.removeCount || 0) }));
+    const p = res.patch;
+    if (p) {
+      // null/없는 값은 무시 — 바뀐 항목만 반영
+      setOpts((o) => ({
+        ...o,
+        ...(p.weather in WEATHER ? { weather: p.weather } : {}),
+        ...(typeof p.seafood === 'boolean' ? { seafood: p.seafood } : {}),
+        removeCount: (o.removeCount || 0) + (Number(p.removeCount) || 0),
+      }));
+    }
   };
 
   const w = WEATHER[opts.weather];

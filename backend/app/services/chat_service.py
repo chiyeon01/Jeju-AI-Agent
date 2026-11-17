@@ -48,13 +48,25 @@ def chat_course(message: str) -> ChatOut:
 
     data = result.data
     reply = str(data.get("reply") or "").strip()
-    raw_patch = data.get("patch") or {}
-    patch = ChatPatch(
-        seafood=raw_patch.get("seafood"),
-        removeCount=raw_patch.get("removeCount") or 0,
-        weather=raw_patch.get("weather"),
-    )
-    has_change = patch.seafood is not None or (patch.removeCount or 0) > 0 or patch.weather is not None
     if not reply:
         return _rule_based(message)
-    return ChatOut(reply=reply, patch=patch if has_change else None)
+    patch = _parse_patch(data.get("patch"))
+    return ChatOut(reply=reply, patch=patch)
+
+
+def _parse_patch(raw) -> ChatPatch | None:
+    """GPT가 준 patch를 검증된 ChatPatch로 변환. 이상한 값은 버리고, 바뀌는 게 없으면 None."""
+    if not isinstance(raw, dict):
+        return None
+    seafood = raw.get("seafood")
+    seafood = seafood if isinstance(seafood, bool) else None
+    weather = raw.get("weather")
+    weather = weather if weather in ("clear", "rain") else None
+    try:
+        remove = int(raw.get("removeCount") or 0)
+    except (TypeError, ValueError):
+        remove = 0
+    remove = max(0, min(remove, 3))
+    if seafood is None and weather is None and remove == 0:
+        return None
+    return ChatPatch(seafood=seafood, removeCount=remove or None, weather=weather)

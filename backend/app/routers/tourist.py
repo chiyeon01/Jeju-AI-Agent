@@ -65,7 +65,7 @@ def plan_course(req: CourseRequest, user: dict = Depends(tourist)) -> CourseOut:
     return course
 
 
-@router.post("/course/chat", response_model=ChatOut)
+@router.post("/course/chat", response_model=ChatOut, response_model_exclude_none=True)
 def chat_course(req: ChatRequest, _: dict = Depends(tourist)) -> ChatOut:
     """대화로 코스 수정 (예: "저녁은 해산물로 바꿔줘")."""
     return chat_course_service(req.message)
