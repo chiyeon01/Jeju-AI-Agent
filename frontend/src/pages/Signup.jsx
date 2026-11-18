@@ -59,10 +59,10 @@ export default function Signup() {
   };
 
   return (
-    <main className="auth">
+    <main className="auth single">
       <div className="auth-back"><BackButton fallback="/login" /></div>
-      <div className="card">
-        <div className="title"><h1>회원가입</h1><p className="small muted">어떤 분으로 제주잇다를 쓰실지 골라 주세요</p></div>
+      <section className="auth-main"><div>
+        <div><h2>회원가입</h2><p className="sub">어떤 분으로 제주잇다를 쓰실지 골라 주세요.</p></div>
         {done ? (
           <div className="stack">
             <p>{done.status === 'PENDING'
@@ -92,10 +92,10 @@ export default function Signup() {
             )}
             {error && <p className="error" role="alert">{error}</p>}
             <button className="btn primary block lg" type="submit" disabled={busy}>{busy ? '보내는 중…' : '가입하기'}</button>
-            <p className="small muted" style={{ textAlign: 'center' }}><Link to="/login">로그인으로 돌아가기</Link></p>
+            <p className="auth-foot">이미 계정이 있나요? <Link to="/login">로그인</Link></p>
           </form>
         )}
-      </div>
+      </div></section>
     </main>
   );
 }

@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react';
 import KakaoMap from '../../components/KakaoMap.jsx';
-import TypeCard from './TypeCard.jsx';
 import RegionArt from '../../components/RegionArt.jsx';
-import { getRegions, nearestRegion, regionFromAddress, searchPhoto } from '../../api/client.js';
-import { PLACES } from '../../mock/tourist.js';
+import { getRegions, getPlaces, nearestRegion, regionFromAddress, searchPhoto } from '../../api/client.js';
 
-const SPOT_KIND = { cafe: '카페', spot: '산책', sunset: '노을', food: '식당', indoor: '실내' };
 import { REGION_INFO, fitWith } from '../../regionInfo.js';
 
 // 고른 지역의 특색: 그림 + 해시태그 + 설명 + 갈 만한 곳
@@ -31,22 +28,29 @@ function RegionPhoto({ region, info }) {
 
 function RegionFeature({ region, profile }) {
   const info = REGION_INFO[region.id];
+  // 갈 만한 곳: 백엔드 장소 목록 (관광객 실제 별점이 반영된 평점 순)
+  const [spots, setSpots] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    setSpots([]);
+    getPlaces(region.id).then((l) => alive && setSpots([...l].sort((a, b) => b.rating - a.rating).slice(0, 4))).catch(() => {});
+    return () => { alive = false; };
+  }, [region.id]);
   if (!info) return null;
-  const spots = PLACES.filter((p) => p.region === region.id).sort((a, b) => b.rating - a.rating).slice(0, 4);
   const fit = fitWith(region.id, profile.code);
   return (
     <div key={region.id} className="region-feature" style={{ '--accent': info.accent }}>
       <RegionPhoto region={region} info={info} />
       <div className="region-body stack" style={{ gap: 8 }}>
         <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <h3 style={{ margin: 0 }}><span aria-hidden="true">{info.emoji}</span> {region.name}</h3>
-          {fit.length > 0 && <span className="pill good">내 유형과 잘 맞아요 · {fit.join(', ')}</span>}
+          <h3 style={{ margin: 0 }}>{region.name}</h3>
+          {fit.length > 0 && <span className="pill brand">내 유형과 잘 맞아요</span>}
         </div>
         <div className="region-tags">{info.tags.map((t) => <span key={t}>{t}</span>)}</div>
         <p className="small" style={{ margin: 0 }}>{info.desc}</p>
         {spots.length > 0 && (
           <p className="small muted" style={{ margin: 0 }}>
-            갈 만한 곳: {spots.map((p) => `${p.name}(${SPOT_KIND[p.kind]})`).join(' · ')}
+            평점 높은 곳 · {spots.map((p) => `${p.name} ★${Number(p.rating).toFixed(1)}`).join(' · ')}
           </p>
         )}
       </div>
@@ -109,37 +113,35 @@ export default function LocationStep({ profile, onDone, onBack }) {
   };
 
   return (
-    <section className="stack">
-      <TypeCard profile={profile} />
-      <div className="card raised stack">
-        <div className="head" style={{ marginBottom: 0 }}>
-          <h3 className="section-title"><span className="ico" aria-hidden="true">📍</span>어디에서 시작할까요?</h3>
-          <button className="btn sm" onClick={useCurrent} disabled={locating || !regions.length}>{locating ? '위치 찾는 중…' : '◎ 현재 위치 사용'}</button>
-        </div>
-        <form className="locate-tools" onSubmit={findAddress}>
-          <input className="input" value={address} onChange={(e) => setAddress(e.target.value)}
-            placeholder="주소 입력 (예: 제주시 애월읍 애월해안로 272)" aria-label="출발 주소" />
-          <button className="btn" type="submit" disabled={finding || !address.trim()}>{finding ? '찾는 중…' : '주소로 찾기'}</button>
-        </form>
-        <span className="small muted">또는 지역을 바로 골라 주세요</span>
+    <section className="stack" style={{ gap: 24 }}>
+      <div className="row between">
+        <h1 style={{ fontSize: '1.5rem' }}>어디에서 출발하나요?</h1>
+        <button className="btn sm" onClick={useCurrent} disabled={locating || !regions.length}>{locating ? '위치 찾는 중…' : '현재 위치'}</button>
+      </div>
+      <form className="locate-tools" onSubmit={findAddress}>
+        <input className="input" value={address} onChange={(e) => setAddress(e.target.value)}
+          placeholder="주소 입력 (예: 애월읍 애월해안로 272)" aria-label="출발 주소" />
+        <button className="btn" type="submit" disabled={finding || !address.trim()}>{finding ? '찾는 중…' : '주소로 찾기'}</button>
+      </form>
+      <div className="field"><span>지역에서 고르기</span>
         <div className="chips">
           {regions.map((r) => (
             <button key={r.id} type="button" className={`chip region-chip ${region?.id === r.id ? 'on' : ''}`} style={{ '--accent': REGION_INFO[r.id]?.accent }} onClick={() => { setRegion(r); setNote(''); }}>{r.name}</button>
           ))}
         </div>
-        {region && <RegionFeature region={region} profile={profile} />}
-        <KakaoMap
-          center={region ?? undefined}
-          labels={regions.map((r) => ({ id: r.id, lat: r.lat, lon: r.lon, text: r.name, on: r.id === region?.id }))}
-          onLabelClick={(id) => { setRegion(regions.find((r) => r.id === id)); setNote(''); }}
-          onClick={(lat, lon) => pickAt(lat, lon, '지도에서 고른 곳과 가장 가까운 지역이에요.')}
-        />
-        {note && <p className="note">{note}</p>}
       </div>
-      <div className="row between">
-        <button className="btn ghost" onClick={onBack}>여행 정보 다시 고르기</button>
+      {note && <p className="note">{note}</p>}
+      {region && <RegionFeature region={region} profile={profile} />}
+      <KakaoMap
+        center={region ?? undefined}
+        labels={regions.map((r) => ({ id: r.id, lat: r.lat, lon: r.lon, text: r.name, on: r.id === region?.id }))}
+        onLabelClick={(id) => { setRegion(regions.find((r) => r.id === id)); setNote(''); }}
+        onClick={(lat, lon) => pickAt(lat, lon, '지도에서 고른 곳과 가장 가까운 지역이에요.')}
+      />
+      <div className="cta-bar sticky">
+        <button className="btn ghost" onClick={onBack}>이전</button>
         <button className="btn primary lg" disabled={!region} onClick={() => onDone(region)}>
-          {region ? `${region.name}에서 코스 만들기 →` : '지역을 골라 주세요'}
+          {region ? `${region.name}에서 코스 만들기` : '출발 지역을 골라 주세요'}
         </button>
       </div>
     </section>

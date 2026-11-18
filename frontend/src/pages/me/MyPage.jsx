@@ -33,18 +33,17 @@ export default function MyPage() {
   return (
     <main className="page narrow">
       <div className="stack">
-        <section className="hero">
-          <div className="profile-head">
-            <span className="avatar" aria-hidden="true" style={{ background: '#fff', color: 'var(--sky-deep)' }}>{(me.name || '?').slice(0, 1)}</span>
+        <header className="page-head" style={{ paddingBottom: 0 }}>
+          <div className="row" style={{ gap: 14 }}>
+            <span className="avatar" aria-hidden="true" style={{ width: 52, height: 52, fontSize: '1.2rem' }}>{(me.name || '?').slice(0, 1)}</span>
             <div>
-              <span className="label">{ROLE_LABEL[me.role] ?? me.role} · {STATUS_LABEL[me.status] ?? me.status ?? '-'}</span>
-              <h2>{me.name}</h2>
-              <p className="small">{me.email}</p>
+              <h1 style={{ fontSize: '1.4rem' }}>{me.name}</h1>
+              <p className="small">{me.email} · {ROLE_LABEL[me.role] ?? me.role}</p>
             </div>
           </div>
-        </section>
-        <h3 className="section-title"><span className="ico" aria-hidden="true">🪪</span>계정 정보</h3>
-        <section className="card stack">
+        </header>
+        <section className="section" style={{ borderTop: 0, paddingTop: 0 }}>
+          <div className="section-head"><h2>계정 정보</h2></div>
           <dl className="info">
             <dt>이름</dt><dd>{me.name}</dd>
             <dt>이메일</dt><dd>{me.email}</dd>
@@ -54,11 +53,11 @@ export default function MyPage() {
             <dt>회원 번호</dt><dd className="num">{me.id}</dd>
           </dl>
           {err && <p className="small" style={{ color: 'var(--bad)' }}>최신 정보를 불러오지 못했어요: {err}</p>}
-          <p className="small muted">{isMock ? '목업 모드라 이 기기에 저장된 정보예요.' : '서버(/auth/me)에 저장된 정보예요.'}</p>
+          {isMock && <p className="small muted">목업 모드라 이 기기에 저장된 정보예요.</p>}
         </section>
 
-        <h3 className="section-title"><span className="ico" aria-hidden="true">⚙️</span>설정</h3>
-        <section className="card stack">
+        <section className="section">
+          <div className="section-head"><h2>화면 설정</h2></div>
           <label className="field">
             <span className="row between"><span>화면 밝기</span><span className="num muted">{settings.brightness}%</span></span>
             <input className="range" type="range" min={BRIGHTNESS_MIN} max={100} step={5} value={settings.brightness}
@@ -70,10 +69,10 @@ export default function MyPage() {
           </div>
         </section>
 
-        <section className="card stack">
+        <section className="section">
           <div className="row between">
             <div>
-              <strong>내 여행 기록</strong>
+              <h2 style={{ fontSize: '1.15rem' }}>내 여행 기록</h2>
               <p className="small muted">성향 테스트·코스·평가 기록 {count}건이 이 기기에 저장돼 있어요.</p>
             </div>
             <button className="btn sm" disabled={!count} onClick={clear}>기록 지우기</button>

@@ -13,7 +13,22 @@ const SUGGEST = ['아기가 놀기 좋은 곳으로 수정해줘.', '분좋카�
 // 실시간 날씨·허브 값은 5초까지만 기다리고, 늦으면 없이 코스를 먼저 짭니다
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
 
-export default function CourseStep({ profile, origin, onDone, onBack }) {
+// 추천 이유 (기획서: 각 장소마다 데이터 근거와 함께). 소개 문장은 맨 아래 회색으로
+const WHY_LABEL = { AI: 'AI', D1: '카드 소비', D2: '혼잡도', D3: '내비 검색', D4: '방문객', D5: '상가', D6: '교통', D7: '날씨', D8: '리뷰' };
+function Why({ reasons }) {
+  const list = (reasons ?? []).filter((r) => r?.[1]);
+  if (!list.length) return null;
+  const data = list.filter(([src]) => src !== '소개').slice(0, 2);
+  const intro = list.find(([src]) => src === '소개');
+  return (
+    <ul className="why">
+      {data.map(([src, text]) => <li key={src + text}><b>{WHY_LABEL[src] ?? '데이터'}</b><span>{text}</span></li>)}
+      {intro && <li className="intro">{intro[1]}</li>}
+    </ul>
+  );
+}
+
+export default function CourseStep({ profile, origin, onDone, onSave, onBack }) {
   const [opts, setOpts] = useState(null); // 날씨를 확인한 뒤 { weather, seafood, removeCount } 로 채웁니다
   const [course, setCourse] = useState(null);
   const [startTime, setStartTime] = useState(profile.startTime || '15:00');
@@ -137,39 +152,38 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
   const indoorAsked = opts?.weather === 'rain' && live?.code !== 'rain';
 
   return (
-    <section className="grid g2" style={{ alignItems: 'start' }}>
-      <div className="stack">
-        <div className="head" style={{ marginBottom: 0 }}>
-          <div>
-            <span className="label">{origin.name} 출발 · {profile.name}</span>
-            <h2>오늘의 추천 코스</h2>
+    <section className="split">
+      <div className="stack" style={{ gap: 20 }}>
+        <div className="stack" style={{ gap: 6 }}>
+          <span className="eyebrow">{origin.name} 출발 · {profile.name}</span>
+          <h1 style={{ fontSize: '1.6rem' }}>오늘의 추천 코스</h1>
+          <div className="weather-bar">
+            <span aria-live="polite">
+              {!opts ? '실시간 날씨를 불러오는 중…'
+                : live ? `${weatherLine(live)}${indoorAsked ? ' · 요청대로 실내 위주' : ''}`
+                  : '실시간 날씨를 불러오지 못해 날씨와 상관없이 짰어요'}
+            </span>
+            {opts && !live && <button className="btn sm ghost" onClick={() => setLiveTry((n) => n + 1)}>다시 불러오기</button>}
           </div>
         </div>
-        <div className="weather-bar">
-          <span aria-live="polite"><span aria-hidden="true">{!opts ? '⏳' : live?.code === 'rain' ? '🌧️' : live ? '☀️' : '🌤️'} </span>
-            {!opts ? '실시간 날씨를 불러오는 중…'
-              : live ? `${weatherLine(live)}${indoorAsked ? ' · 요청대로 실내 위주' : ''}`
-                : '실시간 날씨를 불러오지 못했어요. 날씨와 상관없이 짠 코스예요'}
-          </span>
-          {opts && !live && <button className="btn sm ghost" onClick={() => setLiveTry((n) => n + 1)}>다시 불러오기</button>}
+        <div className="row between" style={{ borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+          <span className="small muted">{course?.source === 'gpt' ? 'AI가 성향·날씨·혼잡도를 보고 골랐어요' : '성향·날씨·혼잡도로 골랐어요'}</span>
+          <button className="btn sm" disabled={!course || busy} onClick={another}>{busy ? '찾는 중…' : '다른 코스 보기'}</button>
         </div>
-        <div className="row between" style={{ gap: 8 }}>
-          <span className="small muted">{course?.source === 'gpt' ? 'AI가 고른 코스예요' : '내 성향에 맞춰 짠 코스예요'} · 이름을 누르면 네이버 지도로 열려요</span>
-          <button className="btn sm ghost" disabled={!course || busy} onClick={another}>{busy ? '찾는 중…' : '다른 코스 보기'}</button>
-        </div>
-        <div className="card raised" aria-busy={!course}>
+        <div aria-busy={!course}>
           {!course ? <div className="skeleton" aria-label="코스를 만드는 중"><i /><i /><i /><span className="small muted">코스를 만드는 중…</span></div> : (
             <ol className="timeline">
               {course.stops.map((s, i) => (
                 <li key={s.id} className="stop">
-                  <span className="t num">{s.at}</span>
+                  <span className="t">{s.at}</span>
                   <span className="rail"><i>{i + 1}</i></span>
                   <div className="body">
-                    {i > 0 && <span className="move">🚗 이동 약 {s.move}분</span>}
+                    {i > 0 && <span className="move">이동 약 {s.move}분</span>}
                     <div className="row">
                       <PlaceLink name={s.name} />
                       <PlaceMeta name={s.name} kind={s.kind} label={s.label} addr={s.addr} />
                     </div>
+                    <Why reasons={s.reasons} />
                     <PlacePhoto name={s.name} />
                   </div>
                 </li>
@@ -179,12 +193,12 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
         </div>
       </div>
 
-      <div className="stack">
+      <div className="stack" style={{ gap: 24, position: 'sticky', top: 80 }}>
         <KakaoMap center={origin} level={9} path markers={(course?.stops ?? []).map((s) => ({ lat: s.lat, lon: s.lon, text: s.name }))} />
-        <div className="card raised chat-card">
-          <div className="ai-head">
-            <span className="ico" aria-hidden="true">✨</span>
-            <div><h3>대화로 코스 고치기</h3><span className="small muted">원하는 걸 말하면 AI가 코스를 바꿔요</span></div>
+        <div className="chat-card">
+          <div>
+            <h3>바꾸고 싶은 점이 있나요?</h3>
+            <span className="small muted">말로 요청하면 AI가 코스를 고쳐요</span>
           </div>
           <div className="chat" ref={chatRef} aria-live="polite">
             {msgs.map((m, i) => <div key={i} className={`bubble ${m.from}`}>{m.text}</div>)}
@@ -198,10 +212,11 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
             <button className="btn primary" type="submit" disabled={busy || !course}>보내기</button>
           </form>
         </div>
-        <div className="row between">
-          <button className="btn ghost" onClick={onBack}>위치 다시 고르기</button>
-          <button className="btn primary lg" disabled={!course} onClick={() => onDone(course, live)}>여행 끝, 평가하기 →</button>
+        <div className="cta-bar sticky">
+          <button className="btn" disabled={!course} onClick={() => onDone(course, live)}>바로 평가</button>
+          <button className="btn primary lg" disabled={!course} onClick={() => (onSave ?? onDone)(course, live)}>이 코스로 다녀올게요</button>
         </div>
+        <p className="small muted" style={{ marginTop: -12 }}>다녀온 뒤 홈에서 평가할 수 있어요.</p>
       </div>
     </section>
   );

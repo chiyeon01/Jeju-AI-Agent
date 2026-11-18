@@ -124,6 +124,12 @@ export async function getRegions() {
   return REGIONS;
 }
 
+/** GET /map/places?region= — 지역의 장소 (평점은 관광객 실제 별점이 반영된 값) */
+export async function getPlaces(region) {
+  if (!isMock) return get(`/map/places${region ? `?region=${encodeURIComponent(region)}` : ''}`);
+  return PLACES.filter((p) => !region || p.region === region);
+}
+
 /** 위경도에서 가장 가까운 지역. 실제 서비스는 GET /regions/nearest?lat=&lon= */
 export async function nearestRegion(lat, lon) {
   if (!isMock) return get(`/regions/nearest?lat=${lat}&lon=${lon}`);

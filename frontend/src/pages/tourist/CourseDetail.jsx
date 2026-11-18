@@ -19,31 +19,31 @@ export default function CourseDetail() {
   }
   const withPos = c.stops.filter((s) => s.lat != null);
   return (
-    <main className="page narrow stack">
-      <section className="hero">
-        <span className="label">{fmtWhen(c.at)} · {c.type}</span>
-        <h2>{c.origin} 출발 · {c.stops.length}곳</h2>
-        {[c.trip, c.weather].filter(Boolean).length > 0 && <p className="small">{[c.trip, c.weather].filter(Boolean).join(' · ')}</p>}
-      </section>
-      <div className="card raised">
-        <ol className="timeline">
-          {c.stops.map((s, i) => (
-            <li key={s.id} className="stop">
-              <span className="t num">{s.at}</span>
-              <span className="rail"><i>{i + 1}</i></span>
-              <div className="body">
-                <div className="row">
-                  <PlaceLink name={s.name} />
-                  <PlaceMeta name={s.name} kind={s.kind} />
-                </div>
-                <PlacePhoto name={s.name} />
+    <main className="page narrow stack" style={{ gap: 28 }}>
+      <header className="page-head" style={{ paddingBottom: 0 }}>
+        <div>
+          <span className="eyebrow">{fmtWhen(c.at)}</span>
+          <h1>{c.origin} 출발 · {c.stops.length}곳</h1>
+          <p className="small">{[c.type, c.trip, c.weather].filter(Boolean).join(' · ')}</p>
+        </div>
+      </header>
+      <ol className="timeline">
+        {c.stops.map((s, i) => (
+          <li key={s.id} className="stop">
+            <span className="t">{s.at}</span>
+            <span className="rail"><i>{i + 1}</i></span>
+            <div className="body">
+              <div className="row">
+                <PlaceLink name={s.name} />
+                <PlaceMeta name={s.name} kind={s.kind} />
               </div>
-            </li>
-          ))}
-        </ol>
-      </div>
+              <PlacePhoto name={s.name} />
+            </div>
+          </li>
+        ))}
+      </ol>
       {withPos.length > 0 && <KakaoMap center={withPos[0]} level={9} path markers={withPos.map((s) => ({ lat: s.lat, lon: s.lon, text: s.name }))} />}
-      <Link className="btn" to="/tourist" style={{ alignSelf: 'flex-start' }}>← 내 여행 기록으로</Link>
+      <Link className="btn" to="/tourist" style={{ alignSelf: 'flex-start' }}>내 여행으로</Link>
     </main>
   );
 }

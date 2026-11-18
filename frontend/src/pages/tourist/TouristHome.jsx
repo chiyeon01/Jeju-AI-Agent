@@ -1,13 +1,15 @@
-// 관광객 첫 화면: 지금까지의 기록을 한눈에 보고, 새 여행을 시작합니다.
+// 관광객 첫 화면: "지금 할 일" 하나를 먼저 보여 주고, 아래에 내 기록을 둡니다.
+// 순환 구조(성향 테스트 → 코스 추천 → 방문 → 평가)에서 지금 어디쯤인지에 따라 다음 행동이 바뀝니다.
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { loadHistory, fmtWhen } from '../../api/history.js';
-import { KIND_LABEL } from '../../mock/tourist.js';
 import TypeCard from './TypeCard.jsx';
 import PlaceLink from '../../components/PlaceLink.jsx';
 
 const starText = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+const JOURNEY = [['성향 테스트', '5문항 · 1분'], ['출발 지역', '현재 위치·주소'], ['코스 추천', '추천 이유와 함께'], ['방문 후 평가', '가게와 다음 추천에 반영']];
+const Chevron = () => <svg className="chev" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 
 export default function TouristHome() {
   const { user } = useAuth();
@@ -24,95 +26,118 @@ export default function TouristHome() {
   const last = chosen?.profile ?? null;
   const avg = h.reviews.length ? (h.reviews.reduce((s, r) => s + r.stars, 0) / h.reviews.length).toFixed(1) : '-';
 
+  // 가장 최근 코스를 아직 평가하지 않았으면 평가부터 권합니다
+  const lastCourse = h.courses[0] ?? null;
+  const lastReviewAt = h.reviews[0]?.at ?? '';
+  const pending = lastCourse && lastCourse.at > lastReviewAt ? lastCourse : null;
+
   return (
-    <main className="page">
-      <div className="stack">
-        <section className="hero">
-          <div className="hero-row">
-            <div className="stack" style={{ gap: 6 }}>
-              <span className="label">내 여행 기록</span>
-              <h1>{user.name}님, 오늘은 제주 어디로 가볼까요?</h1>
-              <p>{last ? `지난번 유형은 '${last.name}'이에요. 같은 유형으로 바로 코스를 만들 수 있어요.` : '5문항 성향 테스트로 나에게 맞는 하루 코스를 만들어 드려요.'}</p>
-            </div>
-            <div className="row">
-              {last && <button className="btn primary lg" onClick={() => nav('/tourist/new', { state: { profile: last } })}>이 유형으로 코스 만들기</button>}
-              <button className={`btn ${last ? '' : 'primary lg'}`} onClick={() => nav('/tourist/new')}>{last ? '성향 테스트 다시 하기' : '첫 여행 코스 만들기'}</button>
-            </div>
+    <main className="page narrow">
+      <header className="page-head">
+        <div>
+          <span className="eyebrow">내 여행</span>
+          <h1>{user.name}님, 안녕하세요</h1>
+        </div>
+        <div className="figures">
+          <div className="figure"><span className="k">만든 코스</span><span className="v">{h.courses.length}</span></div>
+          <div className="figure"><span className="k">보낸 평가</span><span className="v">{h.reviews.length}</span></div>
+          <div className="figure"><span className="k">평균 별점</span><span className="v">{avg}</span></div>
+        </div>
+      </header>
+
+      {pending ? (
+        <section className="next">
+          <div>
+            <span className="eyebrow">평가를 기다리고 있어요</span>
+            <h2>{pending.origin} 출발 코스, 어떠셨어요?</h2>
+            <p className="small muted" style={{ marginTop: 4 }}>{pending.stops.map((s) => s.name).join(' · ')}</p>
           </div>
-          <div className="hero-stats">
-            <div className="hero-stat"><span>만든 코스</span><b>{h.courses.length}</b></div>
-            <div className="hero-stat"><span>보낸 평가</span><b>{h.reviews.length}</b></div>
-            <div className="hero-stat"><span>평균 별점</span><b>{avg}</b></div>
+          <p className="small">별점을 남기면 가게의 지표와 다음 여행자의 추천에 바로 반영돼요.</p>
+          <div className="row">
+            <button className="btn primary lg" onClick={() => nav('/tourist/new', { state: { review: pending, profile: last } })}>평가하기</button>
+            <button className="btn lg" onClick={() => nav('/tourist/new', last ? { state: { profile: last } } : undefined)}>새 코스 만들기</button>
           </div>
         </section>
+      ) : last ? (
+        <section className="next">
+          <div>
+            <span className="eyebrow">오늘의 코스</span>
+            <h2>‘{last.name}’ 유형으로 코스를 만들어 볼까요?</h2>
+          </div>
+          <p className="small">여행 시간과 이동 수단, 출발 지역만 고르면 실시간 날씨와 혼잡도를 반영해 하루 코스를 짜 드려요.</p>
+          <div className="row">
+            <button className="btn primary lg" onClick={() => nav('/tourist/new', { state: { profile: last } })}>코스 만들기</button>
+            <button className="btn lg" onClick={() => nav('/tourist/new')}>성향 테스트 다시 하기</button>
+          </div>
+        </section>
+      ) : (
+        <section className="next">
+          <div>
+            <span className="eyebrow">처음 오셨네요</span>
+            <h2>나에게 맞는 제주의 하루를 찾아볼까요?</h2>
+          </div>
+          <ol className="journey">
+            {JOURNEY.map(([k, v], i) => <li key={k} className={i === 0 ? 'on' : ''}><b>{k}</b>{v}</li>)}
+          </ol>
+          <div className="row"><button className="btn primary lg" onClick={() => nav('/tourist/new')}>성향 테스트 시작</button></div>
+        </section>
+      )}
 
-        <div className="grid g2" style={{ alignItems: 'start' }}>
-          <section className="stack">
-            <h3 className="section-title"><span className="ico" aria-hidden="true">🧭</span>내 여행 유형</h3>
-            {last ? (
-              <>
-                {types.length > 1 && (
-                  <div className="chips" role="radiogroup" aria-label="내 여행 유형">
-                    {types.map((t) => (
-                      <button key={t.profile.code} type="button" role="radio" aria-checked={t.profile.code === chosen.profile.code}
-                        className={`chip ${t.profile.code === chosen.profile.code ? 'on' : ''}`} onClick={() => setPick(t.profile.code)}>
-                        {t.profile.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <TypeCard profile={last} showTrip={false} />
-                <p className="small muted">{fmtWhen(chosen.at)}에 나온 유형이에요 · 고른 유형으로 시작하면 여행 시간·이동 수단부터 다시 정해요</p>
-              </>
-            ) : (
-              <div className="card empty"><span className="big" aria-hidden="true">🧭</span><p>아직 성향 테스트를 하지 않았어요.</p><Link className="btn primary sm" to="/tourist/new">5문항 테스트 하기</Link></div>
-            )}
-
-            <h3 className="section-title"><span className="ico" aria-hidden="true">⭐</span>최근 평가</h3>
-            <div className="card">
-              {h.reviews.length ? (
-                <ul className="hist">
-                  {h.reviews.slice(0, 5).map((r, i) => (
-                    <li key={i}>
-                      <div className="row between"><PlaceLink name={r.name} /><span className="small" style={{ color: 'var(--star)', letterSpacing: 1 }} aria-label={`별 ${r.stars}개`}>{starText(r.stars)}</span></div>
-                      {r.text && <span className="small">{r.text}</span>}
-                      <span className="small muted">{fmtWhen(r.at)}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : <p className="muted small">여행을 마치고 평가를 보내면 여기에 모여요.</p>}
+      {last && (
+        <section className="section" style={{ marginTop: 32 }}>
+          <div className="section-head"><h2>내 여행 유형</h2><span className="small muted">{fmtWhen(chosen.at)}</span></div>
+          {types.length > 1 && (
+            <div className="chips" role="radiogroup" aria-label="내 여행 유형">
+              {types.map((t) => (
+                <button key={t.profile.code} type="button" role="radio" aria-checked={t.profile.code === chosen.profile.code}
+                  className={`chip ${t.profile.code === chosen.profile.code ? 'on' : ''}`} onClick={() => setPick(t.profile.code)}>
+                  {t.profile.name}
+                </button>
+              ))}
             </div>
-          </section>
+          )}
+          <TypeCard profile={last} showTrip={false} />
+        </section>
+      )}
 
-          <section className="stack">
-            <h3 className="section-title"><span className="ico" aria-hidden="true">🗺️</span>최근 코스</h3>
-            <div className="card">
-              {h.courses.length ? (
-                <ul className="hist">
-                  {h.courses.slice(0, 6).map((c, i) => (
-                    <li key={i}>
-                      <Link className="course-link" to={`/tourist/history/${i}`}>
-                        <div className="row between">
-                          <span className="title">{c.origin} 출발 · {c.stops.length}곳</span>
-                          <span className="small muted">{fmtWhen(c.at)}</span>
-                        </div>
-                        <span className="route">{c.stops.map((s, j) => <span key={j}>{j > 0 && <i aria-hidden="true">›</i>} {s.name}</span>)}</span>
-                        <div className="row" style={{ gap: 6 }}>
-                          {c.weather && <span className="pill">{c.weather}</span>}
-                          {[...new Set(c.stops.map((s) => KIND_LABEL[s.kind]).filter(Boolean))].slice(0, 3).map((k) => <span key={k} className="pill">{k}</span>)}
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="empty"><span className="big" aria-hidden="true">🗺️</span><p>아직 다녀온 코스가 없어요.</p><Link className="btn primary sm" to="/tourist/new">코스 만들기</Link></div>
-              )}
-            </div>
-            <p className="small muted">기록은 이 기기에만 저장돼요. 내 정보에서 지울 수 있어요.</p>
-          </section>
-        </div>
-      </div>
+      <section className="section" style={last ? undefined : { marginTop: 32 }}>
+        <div className="section-head"><h2>최근 코스</h2><span className="small muted">{h.courses.length ? `${h.courses.length}개` : ''}</span></div>
+        {h.courses.length ? (
+          <div className="rows">
+            {h.courses.slice(0, 6).map((c, i) => (
+              <Link key={i} className="row-link" to={`/tourist/history/${i}`}>
+                <span className="grow">
+                  <span className="title">{c.origin} 출발 · {c.stops.length}곳</span>
+                  <span className="sub">{c.stops.map((s) => s.name).join(' → ')}</span>
+                </span>
+                <span className="end"><span className="small muted">{fmtWhen(c.at)}</span>{c.weather && <span className="small muted">{c.weather}</span>}</span>
+                <Chevron />
+              </Link>
+            ))}
+          </div>
+        ) : <p className="small muted">아직 만든 코스가 없어요.</p>}
+      </section>
+
+      <section className="section">
+        <div className="section-head"><h2>내가 남긴 평가</h2></div>
+        {h.reviews.length ? (
+          <ul className="rows">
+            {h.reviews.slice(0, 5).map((r, i) => (
+              <li key={i}>
+                <span className="grow">
+                  <PlaceLink name={r.name} />
+                  {r.text && <span className="sub">{r.text}</span>}
+                </span>
+                <span className="end">
+                  <span className="small" style={{ color: 'var(--star)', letterSpacing: 1 }} aria-label={`별 ${r.stars}개`}>{starText(r.stars)}</span>
+                  <span className="small muted">{fmtWhen(r.at)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="small muted">여행을 마치고 평가를 보내면 여기에 모여요.</p>}
+        <p className="small muted">기록은 이 기기에만 저장돼요. 내 정보에서 지울 수 있어요.</p>
+      </section>
     </main>
   );
 }

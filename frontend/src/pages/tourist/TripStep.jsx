@@ -1,7 +1,6 @@
 // 여행 정보: 동행 · 이동 수단(여러 개) · 여행 시작·끝 시각(10분 단위)
 // 성향은 그대로여도 시간과 이동 수단은 여행마다 달라서, 지난 유형으로 시작해도 이 단계부터 합니다.
 import { useState } from 'react';
-import TypeCard from './TypeCard.jsx';
 import { COMPANIONS, TRANSPORTS } from '../../mock/tourist.js';
 import { tripHours } from '../../api/client.js';
 
@@ -42,37 +41,33 @@ export default function TripStep({ profile, onDone, onBack }) {
   };
 
   return (
-    <section className="stack">
-      <TypeCard profile={profile} showTrip={false} />
-      <h2>이번 여행은 어떻게 다니나요?</h2>
-      <div className="card raised stack" style={{ gap: 20 }}>
-        <div className="field"><span>동행</span>
-          <div className="chips" role="radiogroup" aria-label="동행">
-            {COMPANIONS.map((c) => <button key={c} type="button" role="radio" aria-checked={companion === c} className={`chip ${companion === c ? 'on' : ''}`} onClick={() => setCompanion(c)}>{c}</button>)}
-          </div>
+    <section className="stack" style={{ gap: 28 }}>
+      <div className="type-line"><span>내 유형 <b>{profile.name}</b></span><button className="btn ghost sm" onClick={onBack}>다시 테스트</button></div>
+      <h1 style={{ fontSize: '1.5rem' }}>이번 여행은 어떻게 다니나요?</h1>
+      <div className="field"><span>누구와 함께하나요?</span>
+        <div className="chips" role="radiogroup" aria-label="동행">
+          {COMPANIONS.map((c) => <button key={c} type="button" role="radio" aria-checked={companion === c} className={`chip ${companion === c ? 'on' : ''}`} onClick={() => setCompanion(c)}>{c}</button>)}
         </div>
-        <div className="field"><span>이동 수단 (여러 개 고를 수 있어요)</span>
-          <div className="chips" role="group" aria-label="이동 수단">
-            {TRANSPORTS.map((t) => <button key={t} type="button" aria-pressed={transports.includes(t)} className={`chip ${transports.includes(t) ? 'on' : ''}`} onClick={() => toggle(t)}>{t}</button>)}
-          </div>
-        </div>
-        <div className="grid g2">
-          <label className="field"><span>여행 시작</span>
-            <select className="select" value={startTime} onChange={(e) => setStart(e.target.value)}>
-              {TIMES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
-          <label className="field"><span>여행 끝</span>
-            <select className="select" value={endTime} onChange={(e) => setEnd(e.target.value)}>
-              {TIMES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
-        </div>
-        {bad ? <p className="error" role="alert">{bad}</p> : <p className="weather-bar" style={{ margin: 0 }}>⏱️ 총 {span} 여행이에요</p>}
       </div>
-      <div className="row between">
-        <button className="btn ghost" onClick={onBack}>성향 테스트 다시 하기</button>
-        <button className="btn primary lg" disabled={!!bad} onClick={done}>출발 지역 고르기 →</button>
+      <div className="field"><span>이동 수단 <span className="muted" style={{ fontWeight: 400 }}>여러 개 고를 수 있어요</span></span>
+        <div className="chips" role="group" aria-label="이동 수단">
+          {TRANSPORTS.map((t) => <button key={t} type="button" aria-pressed={transports.includes(t)} className={`chip ${transports.includes(t) ? 'on' : ''}`} onClick={() => toggle(t)}>{t}</button>)}
+        </div>
+      </div>
+      <div className="field"><span>여행 시간</span>
+        <div className="grid g2" style={{ gap: 8 }}>
+          <select className="select" aria-label="여행 시작" value={startTime} onChange={(e) => setStart(e.target.value)}>
+            {TIMES.map((t) => <option key={t} value={t}>{t} 시작</option>)}
+          </select>
+          <select className="select" aria-label="여행 끝" value={endTime} onChange={(e) => setEnd(e.target.value)}>
+            {TIMES.map((t) => <option key={t} value={t}>{t} 끝</option>)}
+          </select>
+        </div>
+        {bad ? <p className="error" role="alert">{bad}</p> : <p className="small muted">총 {span}</p>}
+      </div>
+      <div className="cta-bar sticky">
+        <span />
+        <button className="btn primary lg" disabled={!!bad} onClick={done}>다음</button>
       </div>
     </section>
   );

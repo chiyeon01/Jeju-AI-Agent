@@ -15,7 +15,7 @@ export default function ReviewStep({ course, profile, onRestart, onSent }) {
     e.preventDefault();
     setSending(true);
     try {
-      const res = await submitReviews(ready.map((s) => ({ placeId: s.id, stars: form[s.id].stars, text: form[s.id].text, profile: profile.code })));
+      const res = await submitReviews(ready.map((s) => ({ placeId: s.id, stars: form[s.id].stars, text: form[s.id].text, profile: profile?.code ?? /\(([A-Z]{4})\)/.exec(course?.type ?? '')?.[1] })));
       onSent?.(ready.map((s) => ({ placeId: s.id, name: s.name, stars: form[s.id].stars, text: form[s.id].text })));
       setDone(res);
     } catch (err) {
@@ -27,38 +27,36 @@ export default function ReviewStep({ course, profile, onRestart, onSent }) {
 
   if (done) {
     return (
-      <div className="card raised done-card">
-        <span className="big" aria-hidden="true">🍊</span>
-        <h2>고마워요!</h2>
-        <p className="muted">평가 {done.accepted}건이 저장됐어요.<br />가게 점수와 다음 여행자의 코스 추천에 반영돼요.</p>
-        <button className="btn primary lg" onClick={onRestart}>내 기록 보기</button>
+      <div className="done-card">
+        <h1>평가를 보냈어요</h1>
+        <p className="muted">{done.accepted}곳의 평가가 가게 지표와 다음 여행자의 추천에 반영돼요.</p>
+        <button className="btn primary lg" style={{ marginTop: 12 }} onClick={onRestart}>내 여행으로</button>
       </div>
     );
   }
 
   return (
-    <form className="stack" onSubmit={submit}>
-      <div className="stack" style={{ gap: 4 }}>
-        <h2>오늘 다녀온 곳은 어땠나요?</h2>
-        <p className="small muted">별점을 누른 곳만 보내요. 한 줄 평은 사장님께 큰 힘이 돼요.</p>
+    <form className="stack" style={{ gap: 0 }} onSubmit={submit}>
+      <div style={{ paddingBottom: 12 }}>
+        <h1 style={{ fontSize: '1.5rem' }}>다녀온 곳은 어땠나요?</h1>
+        <p className="muted" style={{ marginTop: 6 }}>별점을 누른 곳만 보내요. 한 줄 평은 사장님께 큰 도움이 돼요.</p>
       </div>
-      {stops.map((s, i) => (
-        <div key={s.id} className={`card review-card ${form[s.id].stars ? 'rated' : ''}`}>
-          <span className="no num" aria-hidden="true">{i + 1}</span>
-          <div className="stack" style={{ gap: 10 }}>
-            <div className="row between">
-              <strong>{s.name}</strong>
-              <Stars value={form[s.id].stars} onChange={(n) => edit(s.id, { stars: n })} />
-            </div>
+      {stops.map((s) => (
+        <div key={s.id} className="review-card">
+          <div className="row between">
+            <strong>{s.name}</strong>
+            <Stars value={form[s.id].stars} onChange={(n) => edit(s.id, { stars: n })} />
+          </div>
+          {form[s.id].stars > 0 && (
             <input className="input" maxLength={100} placeholder="한 줄 평 (선택)" aria-label={`${s.name} 한 줄 평`}
                    value={form[s.id].text} onChange={(e) => edit(s.id, { text: e.target.value })} />
-          </div>
+          )}
         </div>
       ))}
       {error && <p className="error" role="alert">{error}</p>}
-      <div className="row between">
-        <button className="btn ghost" type="button" onClick={onRestart}>건너뛰기</button>
-        <button className="btn primary lg" type="submit" disabled={!ready.length || sending}>{sending ? '보내는 중…' : `평가 ${ready.length}건 보내기`}</button>
+      <div className="cta-bar sticky" style={{ marginTop: 16 }}>
+        <button className="btn ghost" type="button" onClick={onRestart}>나중에 하기</button>
+        <button className="btn primary lg" type="submit" disabled={!ready.length || sending}>{sending ? '보내는 중…' : ready.length ? `${ready.length}곳 평가 보내기` : '별점을 눌러 주세요'}</button>
       </div>
     </form>
   );
