@@ -6,7 +6,7 @@ export default function TypeCard({ profile, showTrip = true }) {
       <h2>{profile.name}</h2>
       <p className="small">{profile.desc}</p>
       <div className="tags">
-        {(profile.tags ?? []).map((t) => <span key={t}>#{t}</span>)}
+        {(profile.tags ?? []).map((t) => <span key={t}>#{String(t).replace(/^#+/, '')}</span>)}
         {trip.map((t) => <span key={t}>{t}</span>)}
       </div>
     </div>

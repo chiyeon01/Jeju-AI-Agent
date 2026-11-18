@@ -10,7 +10,7 @@ import { ROLE_LABEL } from '../../mock/auth.js';
 import { buildXlsx, downloadBlob } from '../../utils/xlsx.js';
 
 // 백업 탭은 잠시 뺐습니다 (API 함수 getAdminBackups 등은 client.js 에 그대로 있음)
-const TABS = ['현황', 'Agent 보고서', '데이터', '계정·보안'];
+const TABS = ['현황', '보고서', '데이터', '계정·보안'];
 // 지역 점수 0~10 (관광객 별점·코스 선택·허브 혼잡도로 실시간 계산)
 const scoreColor = (s) => (s >= 7 ? '#2e8b57' : s >= 5 ? '#87CEEB' : '#d0534a');
 const fmtAt = (iso) => (iso ? iso.slice(5, 16).replace('T', ' ') : '');
@@ -60,7 +60,7 @@ function Overview({ events, tick }) {
             <h3>지역 점수 (0~10)</h3>
             <span className="small muted">{scores ? `${fmtAt(scores.updatedAt)} 계산` : '계산 중…'}</span>
           </div>
-          <p className="small muted" style={{ margin: 0 }}>관광객 별점 만족도 50% · 최근 7일 코스 선택과 평가 30% · 데이터허브 혼잡도 20%{scores?.crowdDate ? ` (${scores.crowdDate})` : ''}</p>
+          <p className="small muted" style={{ margin: 0 }}>별점 50% · 최근 7일 이용 30% · 혼잡도 20%</p>
           <KakaoMap circles={rows.filter((r) => pos[r.regionId]).map((r) => ({ lat: pos[r.regionId].lat, lon: pos[r.regionId].lon, radius: 4000, color: scoreColor(r.score), text: `${r.name} ${r.score}` }))} />
           <div className="table-wrap">
             <table className="data">
@@ -86,10 +86,10 @@ function Overview({ events, tick }) {
         </div>
       </div>
       <div className="card">
-        <div className="head"><h3>장소별 평가 (고유 번호)</h3><span className="small muted">평가가 들어오면 사장님 화면에 바로 알리고 Agent가 분석해요</span></div>
+        <div className="head"><h3>장소별 평가 (고유 번호)</h3></div>
         <div className="table-wrap">
           <table className="data">
-            <thead><tr><th className="r">번호</th><th>장소</th><th className="r">평가</th><th className="r">평균</th><th>사장님</th><th>최근 Agent 분석</th></tr></thead>
+            <thead><tr><th className="r">번호</th><th>장소</th><th className="r">평가</th><th className="r">평균</th><th>사장님</th><th>최근 분석</th></tr></thead>
             <tbody>
               {(places ?? []).filter((p) => p.reviews > 0 || p.owner).concat((places ?? []).filter((p) => !p.reviews && !p.owner)).slice(0, 30).map((p) => (
                 <tr key={p.id}>
@@ -128,14 +128,13 @@ function Reports() {
           <h3>저장된 보고서</h3>
           <button className="btn sm primary" disabled={busy} onClick={make}>{busy ? '작성 중…' : '지금 보고서 만들기'}</button>
         </div>
-        <p className="small muted" style={{ margin: 0 }}>Agent가 관광객 평가·코스 선택·지역 점수를 읽고 문서를 써서 Main PC에 저장해요. 허브 수치는 등급으로만 넘겨요.</p>
         {err && <p className="note bad">{err}</p>}
         {!list ? <p className="muted">불러오는 중…</p> : list.length === 0 ? <p className="muted">아직 보고서가 없어요.</p> : (
           <ul className="list">
             {list.map((r) => (
               <li key={r.id}>
                 <button className={`btn ghost sm${open?.id === r.id ? ' on' : ''}`} style={{ width: '100%', justifyContent: 'space-between' }} onClick={() => setOpen(r)}>
-                  <span>{r.title}</span><span className="pill">{r.source === 'gpt' ? 'GPT' : '규칙'}</span>
+                  <span>{r.title}</span><span className="small muted">{fmtAt(r.createdAt)}</span>
                 </button>
               </li>
             ))}
@@ -143,7 +142,7 @@ function Reports() {
         )}
       </div>
       <div className="card">
-        {open ? <><div className="head"><h3>{open.title}</h3>{open.createdAt && <span className="small muted">{fmtAt(open.createdAt)} · {open.source === 'gpt' ? 'GPT 작성' : '규칙 기반'}</span>}</div><Markdown text={open.body} /></> : <div className="empty"><p>보고서를 고르거나 새로 만들어 주세요.</p></div>}
+        {open ? <><div className="head"><h3>{open.title}</h3>{open.createdAt && <span className="small muted">{fmtAt(open.createdAt)}</span>}</div><Markdown text={open.body} /></> : <div className="empty"><p>보고서를 고르거나 새로 만들어 주세요.</p></div>}
       </div>
     </div>
   );
@@ -155,7 +154,7 @@ function DataTab() {
   return (
     <div className="stack">
       <div className="card stack">
-        <h3>원천 데이터 (제주데이터허브)</h3>
+        <h3>원천 데이터</h3>
         <Progress3D
           label="정상 적재된 원천 데이터"
           value={d.sources.filter((s) => s.status === 'ok').length}
@@ -392,9 +391,7 @@ export default function MainConsole() {
     <main className="page console">
       <header className="console-head">
         <div>
-          <span className="label">Main PC · 제주시</span>
           <h1>통합 관리</h1>
-          <p className="small">지역 점수와 실시간 이벤트, 데이터허브 적재 상태를 봅니다.</p>
         </div>
         <ExportButton events={events} />
       </header>

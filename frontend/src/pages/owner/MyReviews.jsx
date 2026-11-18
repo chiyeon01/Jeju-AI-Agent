@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Stars } from '../../components/Charts.jsx';
 import Markdown from '../../components/Markdown.jsx';
+import { relTime } from '../../utils/format.js';
 import { getMyReviews, getMerchantPlaces, linkMyPlace, analyzeMyReviews, subscribeMyStore } from '../../api/client.js';
 
 const KIND = { food: '식당', cafe: '카페', indoor: '실내 체험' };
@@ -34,7 +35,7 @@ function LinkPlace({ onLinked, current }) {
       <div className="store-list" role="listbox" aria-label="평점을 받은 가게">
         {places === null && <div className="skeleton" style={{ padding: '16px 0' }}><i /><i /></div>}
         {places?.length === 0 && (
-          <p className="small muted" style={{ padding: '16px 0' }}>{q.trim() ? `'${q.trim()}'에 해당하는, 관광객 평점을 받은 가게가 없어요.` : '아직 관광객 평점을 받은 가게가 없어요. 관광객이 평점을 남기면 여기에 나타나요.'}</p>
+          <p className="small muted" style={{ padding: '16px 0' }}>{q.trim() ? `'${q.trim()}' 검색 결과가 없어요.` : '아직 평가를 받은 가게가 없어요.'}</p>
         )}
         {places?.map((p) => (
           <button key={p.id} type="button" role="option" aria-selected={pick === p.id} className="store-opt" onClick={() => setPick(p.id)}>
@@ -70,7 +71,7 @@ export default function MyReviews({ onData, topics, ask, action }) {
     const off = subscribeMyStore((e) => {
       if (e.placeId && e.placeId !== placeId) return;
       if (e.type === '평가 등록') {
-        setToast(`새 평가 ${'★'.repeat(e.stars ?? 0)} — Agent가 곧 다시 분석해요`);
+        setToast(`새 평가가 들어왔어요 ${'★'.repeat(e.stars ?? 0)}`);
         load();
       } else if (e.type === '리뷰 분석') {
         setToast('AI 개선 제안이 새로 나왔어요');
@@ -95,7 +96,7 @@ export default function MyReviews({ onData, topics, ask, action }) {
         <header>
           <span className="eyebrow">사장님</span>
           <h1>내 가게를 찾아 주세요</h1>
-          <p className="muted" style={{ marginTop: 6 }}>관광객 평점을 받은 가게만 검색돼요. 연결하면 실제 평가로 만든 지표와 AI 개선 제안을 볼 수 있어요.</p>
+          <p className="muted" style={{ marginTop: 6 }}>관광객 평가를 받은 가게만 검색돼요.</p>
         </header>
         <LinkPlace current={d?.place?.id} onLinked={() => { setRelink(false); setD(undefined); load(); }} />
         {relink && <button className="btn ghost" style={{ justifySelf: 'start' }} onClick={() => setRelink(false)}>취소</button>}
@@ -107,6 +108,9 @@ export default function MyReviews({ onData, topics, ask, action }) {
   const s = d.summary;
   const max = Math.max(1, ...Object.values(s.dist));
   const texts = d.reviews.filter((r) => r.text).length;
+  const weekAgo = Date.now() - 7 * 86400000;
+  const week = d.reviews.filter((r) => new Date(r.createdAt).getTime() >= weekAgo);
+  const typeName = Object.fromEntries(s.byType.map((t) => [t.code, t.name]));
   return (
     <>
       {toast && <div className="toast" role="status">{toast}</div>}
@@ -114,7 +118,6 @@ export default function MyReviews({ onData, topics, ask, action }) {
         <div>
           <span className="eyebrow">{[d.regionScore?.name, KIND[d.place.kind] ?? d.place.kind, d.place.no ? `장소 #${d.place.no}` : null].filter(Boolean).join(' · ')}</span>
           <h1>{d.place.name}</h1>
-          <p className="small">관광객이 남긴 실제 평가로만 만든 화면이에요 <span className="live" aria-hidden="true" style={{ marginLeft: 4 }} /></p>
         </div>
         <button className="btn sm" onClick={() => setRelink(true)}>가게 바꾸기</button>
       </header>
@@ -124,10 +127,11 @@ export default function MyReviews({ onData, topics, ask, action }) {
       </nav>
 
       <section id="metrics" className="section" style={{ borderTop: 0 }}>
-        <div className="section-head"><h2><span className="step-no">1</span>가게 지표</h2><span className="small muted">평가가 들어올 때마다 바로 바뀌어요</span></div>
+        <div className="section-head"><h2><span className="step-no">1</span>가게 지표</h2></div>
         <div className="figures">
           <div className="figure"><span className="k">평균 별점</span><span className="v">{s.count ? s.avg.toFixed(1) : '-'}<small>/ 5</small></span></div>
           <div className="figure"><span className="k">관광객 평가</span><span className="v">{s.count}<small>건</small></span></div>
+          <div className="figure"><span className="k">최근 7일</span><span className="v">{week.length}<small>건</small></span></div>
           <div className="figure"><span className="k">리뷰 글</span><span className="v">{texts}<small>건</small></span></div>
           {d.regionScore && <div className="figure"><span className="k">{d.regionScore.name} 지역 점수</span><span className="v">{d.regionScore.score}<small>/ 10</small></span></div>}
         </div>
@@ -161,7 +165,7 @@ export default function MyReviews({ onData, topics, ask, action }) {
             <div>
               {d.reviews.slice(0, 6).map((r) => (
                 <div key={r.id} className="review-item">
-                  <div className="row between small"><Stars value={r.stars} /><span className="muted num">{when(r.createdAt)}</span></div>
+                  <div className="row between small"><span className="row" style={{ gap: 8 }}><Stars value={r.stars} />{r.profile && typeName[r.profile] && <span className="muted">{typeName[r.profile]}</span>}</span><span className="muted" title={when(r.createdAt)}>{relTime(r.createdAt)}</span></div>
                   {r.text ? <p className="quote">{r.text}</p> : <p className="small muted">별점만 남겼어요.</p>}
                 </div>
               ))}
@@ -180,17 +184,17 @@ export default function MyReviews({ onData, topics, ask, action }) {
           <div className="stack" style={{ gap: 8 }}>
             {d.analysis ? (
               <>
-                <span className="small muted">{when(d.analysis.createdAt)} · {d.analysis.source === 'gpt' ? 'GPT 분석' : '규칙 기반 분석'} · 새 평가가 오면 자동으로 다시 분석해요</span>
+                <span className="small muted">{when(d.analysis.createdAt)} 분석</span>
                 <div className="box"><Markdown text={d.analysis.body} /></div>
               </>
-            ) : <p className="small muted">별점과 리뷰를 읽고 강점·개선할 점·다음 할 일을 정리해 드려요.</p>}
+            ) : <p className="small muted">‘분석 받기’를 누르면 강점, 개선할 점, 다음에 할 일을 정리해 드려요.</p>}
           </div>
           {ask}
         </div>
       </section>
 
       <section id="actions" className="section">
-        <div className="section-head"><h2><span className="step-no">4</span>개선 조치</h2><span className="small muted">등록한 조치는 관광객 추천 문구에 반영되고, 이후 평가로 효과를 다시 확인해요</span></div>
+        <div className="section-head"><h2><span className="step-no">4</span>개선 조치</h2></div>
         {action}
       </section>
     </>

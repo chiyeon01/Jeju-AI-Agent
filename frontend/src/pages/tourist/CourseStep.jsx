@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import KakaoMap from '../../components/KakaoMap.jsx';
-import { planCourse, alternativeCourse, chatCourse, getHubData } from '../../api/client.js';
+import { planCourse, alternativeCourse, chatCourse, getHubData, naverPlaceUrl } from '../../api/client.js';
 import PlaceLink, { PlacePhoto, PlaceMeta } from '../../components/PlaceLink.jsx';
 import { getLiveWeather, weatherLine } from '../../api/weather.js';
 import { planCourseAI, chatCourseAI } from '../../api/planner.js';
 import { applyHub } from '../../api/hub.js';
 import { addToCourse, keepAdded } from '../../api/courseEdit.js';
+import { courseSummary, leaveAt, kakaoRouteUrl, duration } from '../../utils/format.js';
 
 // 대화로 코스 고치기 예시 (백엔드 대화 Agent 가 아이 동반·분위기 좋은 카페·해산물로 알아듣습니다)
 const SUGGEST = ['아기가 놀기 좋은 곳으로 수정해줘.', '분좋카를 원해.', '회를 먹고싶어.'];
@@ -14,7 +15,7 @@ const SUGGEST = ['아기가 놀기 좋은 곳으로 수정해줘.', '분좋카�
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
 
 // 추천 이유 (기획서: 각 장소마다 데이터 근거와 함께). 소개 문장은 맨 아래 회색으로
-const WHY_LABEL = { AI: 'AI', D1: '카드 소비', D2: '혼잡도', D3: '내비 검색', D4: '방문객', D5: '상가', D6: '교통', D7: '날씨', D8: '리뷰' };
+const WHY_LABEL = { AI: '추천', D1: '소비', D2: '혼잡', D3: '인기', D4: '인기', D5: '상권', D6: '교통', D7: '날씨', D8: '리뷰' };
 function Why({ reasons }) {
   const list = (reasons ?? []).filter((r) => r?.[1]);
   if (!list.length) return null;
@@ -150,6 +151,16 @@ export default function CourseStep({ profile, origin, onDone, onSave, onBack }) 
   };
 
   const indoorAsked = opts?.weather === 'rain' && live?.code !== 'rain';
+  const sum = course ? courseSummary(course.stops) : null;
+  // 공유: 코스를 글로 복사 (휴대폰이면 공유 창)
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    const text = [`[제주잇다] ${origin.name} 출발 코스 (${sum.start}~${sum.end})`, ...course.stops.map((s, i) => `${i + 1}. ${s.at} ${s.name}`)].join('\n');
+    try {
+      if (navigator.share) await navigator.share({ title: '제주잇다 코스', text });
+      else { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    } catch { /* 공유 취소 */ }
+  };
 
   return (
     <section className="split">
@@ -157,18 +168,22 @@ export default function CourseStep({ profile, origin, onDone, onSave, onBack }) 
         <div className="stack" style={{ gap: 6 }}>
           <span className="eyebrow">{origin.name} 출발 · {profile.name}</span>
           <h1 style={{ fontSize: '1.6rem' }}>오늘의 추천 코스</h1>
+          {sum && <p className="course-sum"><b>{course.stops.length}곳</b><span>{sum.start} ~ {sum.end}</span><span>총 {sum.total}</span><span>이동 {sum.move}</span></p>}
           <div className="weather-bar">
             <span aria-live="polite">
-              {!opts ? '실시간 날씨를 불러오는 중…'
+              {!opts ? '날씨 확인 중…'
                 : live ? `${weatherLine(live)}${indoorAsked ? ' · 요청대로 실내 위주' : ''}`
-                  : '실시간 날씨를 불러오지 못해 날씨와 상관없이 짰어요'}
+                  : '날씨 정보를 불러오지 못했어요'}
             </span>
             {opts && !live && <button className="btn sm ghost" onClick={() => setLiveTry((n) => n + 1)}>다시 불러오기</button>}
           </div>
         </div>
         <div className="row between" style={{ borderTop: '1px solid var(--line)', paddingTop: 16 }}>
-          <span className="small muted">{course?.source === 'gpt' ? 'AI가 성향·날씨·혼잡도를 보고 골랐어요' : '성향·날씨·혼잡도로 골랐어요'}</span>
-          <button className="btn sm" disabled={!course || busy} onClick={another}>{busy ? '찾는 중…' : '다른 코스 보기'}</button>
+          <span className="small muted">내 성향과 날씨·혼잡도에 맞춰 골랐어요</span>
+          <div className="row" style={{ gap: 6 }}>
+            <button className="btn sm" disabled={!course} onClick={share}>{copied ? '복사했어요' : '공유'}</button>
+            <button className="btn sm" disabled={!course || busy} onClick={another}>{busy ? '찾는 중…' : '다른 코스 보기'}</button>
+          </div>
         </div>
         <div aria-busy={!course}>
           {!course ? <div className="skeleton" aria-label="코스를 만드는 중"><i /><i /><i /><span className="small muted">코스를 만드는 중…</span></div> : (
@@ -178,13 +193,18 @@ export default function CourseStep({ profile, origin, onDone, onSave, onBack }) 
                   <span className="t">{s.at}</span>
                   <span className="rail"><i>{i + 1}</i></span>
                   <div className="body">
-                    {i > 0 && <span className="move">이동 약 {s.move}분</span>}
+                    {i > 0 && <span className="move">↓ {profile.transport?.split('·')[0] || '이동'} 약 {duration(s.move)}</span>}
                     <div className="row">
                       <PlaceLink name={s.name} />
                       <PlaceMeta name={s.name} kind={s.kind} label={s.label} addr={s.addr} />
                     </div>
+                    {s.stay > 0 && <span className="small muted">{s.at} ~ {leaveAt(s)} · 머무는 시간 {duration(s.stay)}</span>}
                     <Why reasons={s.reasons} />
                     <PlacePhoto name={s.name} />
+                    <div className="stop-actions">
+                      <a href={kakaoRouteUrl(s)} target="_blank" rel="noopener noreferrer">길찾기</a>
+                      <a href={naverPlaceUrl(s.name)} target="_blank" rel="noopener noreferrer">장소 정보</a>
+                    </div>
                   </div>
                 </li>
               ))}

@@ -109,7 +109,7 @@ export async function getLiveWeather(lat, lon) {
 export function weatherLine(w) {
   const parts = [`${w.icon} ${w.label} ${Math.round(w.temp * 10) / 10}°C`];
   if (w.humidity != null) parts.push(`습도 ${w.humidity}%`);
-  if (w.wind != null) parts.push(`풍속 ${w.wind}m/s`);
-  if (w.rain1h > 0) parts.push(`1시간 강수 ${w.rain1h}mm`);
-  return `${parts.join(' · ')} (실시간 ${w.source}${w.at ? `, ${w.at} 기준` : ''})`;
+  if (w.wind != null) parts.push(`바람 ${w.wind}m/s`);
+  if (w.rain1h > 0) parts.push(`강수 ${w.rain1h}mm`);
+  return `지금 ${parts.join(' · ')}`;
 }

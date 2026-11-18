@@ -95,8 +95,7 @@ def _with_real_crowd_reason(place: dict, crowd: dict | None) -> list[list[str]]:
         return reasons
     pct = info["vsAveragePct"]
     level = "낮음" if info["index"] < 0.34 else "보통" if info["index"] < 0.67 else "높음"
-    text = (f"읍면동 방문인구 하루 {info['visitPopPerEmd']:,}명 · 제주 평균 대비 "
-            f"{'+' if pct >= 0 else ''}{pct}% → 혼잡도 {level} ({crowd['date']} 실측)")
+    text = f"혼잡도 {level} · 평소보다 {abs(pct)}% {'붐벼요' if pct > 0 else '한산해요'}" if pct else f"혼잡도 {level} · 평소 수준이에요"
     for r in reasons:
         if r[0] == "D2":
             r[1] = text

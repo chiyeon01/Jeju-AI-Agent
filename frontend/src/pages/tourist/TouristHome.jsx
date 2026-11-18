@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthContext.jsx';
 import { loadHistory, fmtWhen } from '../../api/history.js';
 import TypeCard from './TypeCard.jsx';
 import PlaceLink from '../../components/PlaceLink.jsx';
+import { greeting, relTime } from '../../utils/format.js';
 
 const starText = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
 const JOURNEY = [['성향 테스트', '5문항 · 1분'], ['출발 지역', '현재 위치·주소'], ['코스 추천', '추천 이유와 함께'], ['방문 후 평가', '가게와 다음 추천에 반영']];
@@ -35,8 +36,8 @@ export default function TouristHome() {
     <main className="page narrow">
       <header className="page-head">
         <div>
-          <span className="eyebrow">내 여행</span>
-          <h1>{user.name}님, 안녕하세요</h1>
+          <span className="eyebrow">{greeting()}</span>
+          <h1>{user.name}님</h1>
         </div>
         <div className="figures">
           <div className="figure"><span className="k">만든 코스</span><span className="v">{h.courses.length}</span></div>
@@ -48,7 +49,7 @@ export default function TouristHome() {
       {pending ? (
         <section className="next">
           <div>
-            <span className="eyebrow">평가를 기다리고 있어요</span>
+            <span className="eyebrow">{relTime(pending.at)} 저장한 코스</span>
             <h2>{pending.origin} 출발 코스, 어떠셨어요?</h2>
             <p className="small muted" style={{ marginTop: 4 }}>{pending.stops.map((s) => s.name).join(' · ')}</p>
           </div>
@@ -110,7 +111,7 @@ export default function TouristHome() {
                   <span className="title">{c.origin} 출발 · {c.stops.length}곳</span>
                   <span className="sub">{c.stops.map((s) => s.name).join(' → ')}</span>
                 </span>
-                <span className="end"><span className="small muted">{fmtWhen(c.at)}</span>{c.weather && <span className="small muted">{c.weather}</span>}</span>
+                <span className="end"><span className="small muted">{relTime(c.at)}</span>{c === pending && <span className="pill brand">평가 전</span>}</span>
                 <Chevron />
               </Link>
             ))}
@@ -130,7 +131,7 @@ export default function TouristHome() {
                 </span>
                 <span className="end">
                   <span className="small" style={{ color: 'var(--star)', letterSpacing: 1 }} aria-label={`별 ${r.stars}개`}>{starText(r.stars)}</span>
-                  <span className="small muted">{fmtWhen(r.at)}</span>
+                  <span className="small muted">{relTime(r.at)}</span>
                 </span>
               </li>
             ))}

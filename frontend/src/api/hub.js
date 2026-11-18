@@ -64,8 +64,8 @@ export function applyHub(places, hub) {
       month: sight ? month : null,
     };
     const real = [];
-    if (sight) real.push(['D4', `허브 ${month} 방문객 ${comma(sight.visitors)}명 (제주 관광지 중 ${popularityLabel(sight.rankPct)})`, 'hub']);
-    if (c) real.push(['D2', `지역 유동인구 평균 대비 ${c.vsAveragePct >= 0 ? '+' : ''}${c.vsAveragePct}% · 혼잡도 ${info.crowd} (${hub.crowd.date})`, 'hub']);
+    if (sight) real.push(['D4', `한 달 방문객 ${comma(sight.visitors)}명 · 제주 관광지 중 ${popularityLabel(sight.rankPct)}`, 'hub']);
+    if (c) real.push(['D2', c.vsAveragePct ? `혼잡도 ${info.crowd} · 평소보다 ${Math.abs(c.vsAveragePct)}% ${c.vsAveragePct > 0 ? '붐벼요' : '한산해요'}` : `혼잡도 ${info.crowd} · 평소 수준이에요`, 'hub']);
     // 허브로 확인한 종류(D2·D4)의 예시 근거는 빼고 실제 값으로 바꿉니다
     const kept = p.reasons.filter(([src]) => !real.some(([s]) => s === src));
     return { ...p, hub: info, reasons: [...real, ...kept] };

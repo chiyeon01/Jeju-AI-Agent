@@ -20,12 +20,12 @@ function ReviewTopics({ reviewCount }) {
   return (
     <div className="stack" style={{ gap: 4 }}>
       <div className="row between">
-        <span className="label">리뷰 주제별 반응 <span style={{ fontWeight: 400 }}>· 낮은 순</span></span>
-        {t && <span className="small muted">{t.source === 'gpt' ? 'GPT' : '규칙 기반'} · 리뷰 {t.textCount}건</span>}
+        <span className="label">손님들이 말한 점</span>
+        {t && <span className="small muted">리뷰 {t.textCount}건</span>}
       </div>
       {err && <p className="note">{err}</p>}
       {!t && !err && <div className="skeleton" style={{ paddingTop: 8 }}><i /><i /><i /></div>}
-      {t && topics.length === 0 && <p className="small muted">아직 분석할 리뷰 글이 없어요. 관광객이 한 줄 평을 남기면 주제별로 정리해 드려요.</p>}
+      {t && topics.length === 0 && <p className="small muted">아직 리뷰 글이 없어요. 한 줄 평이 모이면 주제별로 정리해 드려요.</p>}
       <div>
         {topics.map((x) => (
           <div key={x.topic} className={`topic ${x.pos < 60 ? 'weak' : ''}`}>
@@ -61,11 +61,11 @@ function AskAgent() {
   };
   return (
     <div className="chat-card">
-      <span className="label">AI에게 직접 물어보기</span>
+      <span className="label">AI에게 물어보기</span>
       {chat.length > 0 && (
         <div className="chat" aria-live="polite">
           {chat.map((m, i) => <div key={i} className={`bubble ${m.from}`}>{m.text}</div>)}
-          {asking && <div className="bubble ai muted">내 가게 리뷰를 확인하는 중…</div>}
+          {asking && <div className="bubble ai muted">확인하는 중…</div>}
         </div>
       )}
       <div className="chips">
@@ -78,6 +78,9 @@ function AskAgent() {
     </div>
   );
 }
+
+// 자주 하는 개선 조치 예시 (눌러서 고친 뒤 등록)
+const IDEAS = ['평일 17~19시 해피아워 할인', '포토존 안내 문구 추가', '아이 메뉴 추가', '웨이팅 알림 도입', '재방문 쿠폰 제공'];
 
 function ActionForm() {
   const [action, setAction] = useState('');
@@ -97,14 +100,17 @@ function ActionForm() {
     <div className="split">
       <form className="stack" style={{ gap: 10 }} onSubmit={submit}>
         <label className="field"><span>새 메뉴·이벤트</span>
-          <input className="input" value={action} onChange={(e) => setAction(e.target.value)} placeholder="예: 17~19시 커플 세트 10% 할인" />
+          <input className="input" value={action} onChange={(e) => setAction(e.target.value)} placeholder="예: 17~19시 커플 세트 10% 할인" maxLength={60} />
         </label>
+        <div className="chips">
+          {IDEAS.map((x) => <button key={x} type="button" className="chip sm" onClick={() => setAction(x)}>{x}</button>)}
+        </div>
         {err && <p className="error">{err}</p>}
-        <button className="btn primary" type="submit" disabled={!action.trim()} style={{ justifySelf: 'start' }}>등록하기</button>
+        <button className="btn primary" type="submit" disabled={!action.trim()} style={{ alignSelf: 'flex-start' }}>등록하기</button>
       </form>
       <div className="stack" style={{ gap: 4 }}>
-        <span className="label">이번에 등록한 조치</span>
-        {saved.length === 0 ? <p className="small muted">AI 개선 제안을 보고 해 볼 일을 등록해 보세요.</p> : (
+        <span className="label">등록한 조치</span>
+        {saved.length === 0 ? <p className="small muted">아직 없어요.</p> : (
           <ul className="rows">
             {saved.map((s, i) => (
               <li key={i}><span className="grow"><span className="title">{s.title}</span><span className="sub">{s.at.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 등록</span></span><span className="pill good">효과 측정 중</span></li>

@@ -21,7 +21,6 @@ function RegionPhoto({ region, info }) {
     <figure className="region-photo">
       <img src={src} alt={`${region.name} 대표 사진 (${info.photo})`} referrerPolicy="no-referrer"
         onError={() => setSrc(src === photo.image && photo.thumbnail && photo.thumbnail !== src ? photo.thumbnail : null)} />
-      <figcaption>{info.photo} · 네이버 이미지 검색</figcaption>
     </figure>
   );
 }
