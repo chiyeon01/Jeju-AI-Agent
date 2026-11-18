@@ -11,7 +11,7 @@ from datetime import datetime
 from app import db, events
 from app.data.tourist_data import PLACES_BY_ID
 from app.schemas import ReviewIn, ReviewsOut
-from app.services import insight_service
+from app.services import insight_service, rating
 
 DAILY_LIMIT = 20
 
@@ -38,4 +38,6 @@ def submit_reviews(reviews: list[ReviewIn], user: dict | None = None) -> Reviews
         # 사장님이 연결된 장소면 Agent 가 리뷰를 다시 분석해 저장하고 알려 줍니다 (잠시 모아서 한 번)
         insight_service.schedule_store_analysis(place["id"])
 
+    if accepted:
+        rating.invalidate()
     return ReviewsOut(accepted=accepted, rejected=rejected)

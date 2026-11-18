@@ -5,7 +5,7 @@
 #  - 원천 데이터 적재 이력   : 데이터허브 API 11종(캐시·오류 상태) + data/ 폴더의 받아 둔 파일
 #  - 품질 점검               : 허위 평가 의심, 좌표 범위, 허브 쿼터·오류, 파일 데이터
 #  - 백업                    : SQLite 스냅샷 (storage/backups), 복구는 관리자 2인 요청 시 실행
-# 지역 상권 건강 "점수"만 매장 실데이터가 없어 시연 기준값을 씁니다 (data/console_data.py).
+#  - 지역 상권 건강 점수     : insight_service.region_scores (별점·수요·혼잡도, 0~10 → 0~100)
 # ─────────────────────────────────────────────
 from __future__ import annotations
 
@@ -16,13 +16,14 @@ from pathlib import Path
 
 from app import db, events
 from app.config import get_settings
-from app.data.console_data import MASKING_RULES, REGION_SCORE_BASELINE
+from app.data.console_data import MASKING_RULES
 from app.data.datahub_catalog import DATASETS
 from app.data.tourist_data import PLACES, REGIONS
 from app.errors import ApiError
 from app.security import public_user
 from app.services.datahub_client import DAILY_QUOTA_GUARD, get_datahub_client
 from app.services.datahub_service import known_latest_date, region_crowd
+from app.services.insight_service import region_scores
 
 BACKUP_KEEP = 14
 _restore_lock = threading.Lock()
@@ -53,12 +54,13 @@ def overview() -> dict:
 def regions_health() -> list[dict]:
     crowd = region_crowd() or {}
     reviews = db.review_counts_by_region()
+    scores = {r["regionId"]: r["score"] for r in region_scores()["regions"]}
     out = []
     for r in REGIONS:
         info = (crowd.get("regions") or {}).get(r["id"]) or {}
         out.append({
             "regionId": r["id"], "name": r["name"], "lat": r["lat"], "lon": r["lon"],
-            "score": REGION_SCORE_BASELINE.get(r["id"], 60),
+            "score": round(scores.get(r["id"], 0) * 10),  # 실데이터 지역 점수(0~10)를 기존 0~100 형식으로
             "visits": info.get("visitPop", 0),          # 데이터허브 D2 방문인구 (crowdDate 기준)
             "reviews": reviews.get(r["id"], 0),          # 앱 평가 누적
             "crowdIndex": info.get("index"),

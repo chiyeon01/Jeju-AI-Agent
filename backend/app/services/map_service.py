@@ -15,6 +15,7 @@ from app.schemas import (
 )
 from app.services.geo import haversine_km
 from app.services.kakao_service import get_kakao_service
+from app.services.rating import with_live_rating
 
 
 def list_regions() -> list[RegionOut]:
@@ -27,7 +28,7 @@ def list_places(region: str | None = None, kind: str | None = None) -> list[Plac
         items = [p for p in items if p["region"] == region]
     if kind:
         items = [p for p in items if p["kind"] == kind]
-    return [PlaceOut(**p) for p in items]
+    return [PlaceOut(**with_live_rating(p)) for p in items]
 
 
 def geocode_address(query: str) -> GeocodeOut:

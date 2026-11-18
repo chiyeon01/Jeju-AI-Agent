@@ -1,14 +1,8 @@
 # ─────────────────────────────────────────────
-# 관리 콘솔 기준값
-# 지역 상권 건강 점수는 매장 단위 실데이터가 쌓이기 전까지 쓰는 시연용 기준값입니다
-# (frontend/src/mock/console.js 의 REGION_HEALTH 와 같은 값). 방문·평가 수는 실데이터로 채웁니다.
+# 관리 콘솔 정책값
+# (지역 상권 건강 점수는 실데이터로 계산합니다: services/insight_service.region_scores)
 # ─────────────────────────────────────────────
 from __future__ import annotations
-
-REGION_SCORE_BASELINE = {
-    "jeju-city": 71, "aewol": 68, "hallim": 63, "daejeong": 57, "jungmun": 66,
-    "seogwipo": 70, "namwon": 54, "seongsan": 74, "gujwa": 61, "jocheon": 65,
-}
 
 # 개인 식별 위험 마스킹 규칙 (정책)
 MASKING_RULES = [

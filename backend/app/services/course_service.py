@@ -30,6 +30,7 @@ from app.services.course_session import CoursePrefs
 from app.services.datahub_service import region_crowd
 from app.services.geo import haversine_km, travel_minutes
 from app.services.llm_service import get_llm_service
+from app.services.rating import live_rating
 
 logger = logging.getLogger("jejuitda.course")
 
@@ -74,7 +75,7 @@ def _congestion(place: dict, crowd: dict | None) -> float:
 def _place_score(profile: ProfileOut, place: dict, rain: bool, crowd: dict | None = None) -> float:
     affinity = _affinity_score(profile, place)
     popularity = _popularity_score(place)
-    rating = place["rating"]
+    rating = live_rating(place)
     weather_fit = 1.0 if (rain and place["indoor"]) or (not rain and not place["indoor"]) else -0.5
     congestion = _congestion(place, crowd)
     return (
@@ -227,7 +228,7 @@ def _schedule(places: list[dict], req: CourseRequest, crowd: dict | None, why: d
         reasons = _with_real_crowd_reason(place, crowd)
         if why and why.get(place["id"]):
             reasons = [["AI", why[place["id"]]], *reasons]
-        out_stops.append(CourseStopOut(**{**place, "reasons": reasons}, at=at, move=move))
+        out_stops.append(CourseStopOut(**{**place, "rating": live_rating(place), "reasons": reasons}, at=at, move=move))
         prev = place
     return out_stops
 
@@ -263,7 +264,7 @@ def plan_alternative(req: AlternativeRequest, prefs: CoursePrefs | None = None) 
     llm = get_llm_service()
     if llm.is_enabled:
         cands = [{"id": p["id"], "name": p["name"], "kind": p["kind"], "indoor": p["indoor"], "seafood": p["seafood"],
-                  "kids": p.get("kids", False), "moodCafe": p.get("mood", False), "rating": p["rating"],
+                  "kids": p.get("kids", False), "moodCafe": p.get("mood", False), "rating": live_rating(p),
                   "km": round(haversine_km(origin["lat"], origin["lon"], p["lat"], p["lon"]), 1),
                   "shownBefore": p["id"] in avoid} for p in near]
         prof = req.profile
