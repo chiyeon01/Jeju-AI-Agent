@@ -1,0 +1,65 @@
+{
+  "date": "2026-08-31",
+  "regions": {
+    "jeju-city": {
+      "index": 0.228,
+      "visitPopPerEmd": 94385,
+      "visitPop": 1793313,
+      "vsAveragePct": -16
+    },
+    "seogwipo": {
+      "index": 0.0,
+      "visitPopPerEmd": 52414,
+      "visitPop": 471722,
+      "vsAveragePct": -53
+    },
+    "jungmun": {
+      "index": 0.234,
+      "visitPopPerEmd": 95571,
+      "visitPop": 286712,
+      "vsAveragePct": -15
+    },
+    "aewol": {
+      "index": 1.0,
+      "visitPopPerEmd": 236508,
+      "visitPop": 236508,
+      "vsAveragePct": 111
+    },
+    "daejeong": {
+      "index": 0.322,
+      "visitPopPerEmd": 111684,
+      "visitPop": 223369,
+      "vsAveragePct": 0
+    },
+    "hallim": {
+      "index": 0.25,
+      "visitPopPerEmd": 98418,
+      "visitPop": 196837,
+      "vsAveragePct": -12
+    },
+    "jocheon": {
+      "index": 0.658,
+      "visitPopPerEmd": 173577,
+      "visitPop": 173577,
+      "vsAveragePct": 55
+    },
+    "gujwa": {
+      "index": 0.152,
+      "visitPopPerEmd": 80436,
+      "visitPop": 160871,
+      "vsAveragePct": -28
+    },
+    "namwon": {
+      "index": 0.151,
+      "visitPopPerEmd": 80272,
+      "visitPop": 160543,
+      "vsAveragePct": -28
+    },
+    "seongsan": {
+      "index": 0.247,
+      "visitPopPerEmd": 97926,
+      "visitPop": 97926,
+      "vsAveragePct": -13
+    }
+  }
+}

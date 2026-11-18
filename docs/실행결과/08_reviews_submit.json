@@ -1,0 +1,39 @@
+{
+  "place": "부두식당",
+  "sent": [
+    {
+      "placeId": "p28",
+      "stars": 5,
+      "text": "고등어구이가 정말 맛있고 노을 보고 가기 딱 좋아요",
+      "profile": "ANPJ"
+    },
+    {
+      "placeId": "p28",
+      "stars": 4,
+      "text": "맛은 좋은데 웨이팅이 30분 넘었어요",
+      "profile": "ANPJ"
+    },
+    {
+      "placeId": "p28",
+      "stars": 3,
+      "text": "가격이 조금 비싸고 좌석이 좁아요",
+      "profile": "ANPJ"
+    },
+    {
+      "placeId": "p28",
+      "stars": 5,
+      "text": "직원분들이 친절하고 반찬도 푸짐해요",
+      "profile": "ANPJ"
+    },
+    {
+      "placeId": "p28",
+      "stars": 4,
+      "text": "주차가 불편하지만 음식은 만족",
+      "profile": "ANPJ"
+    }
+  ],
+  "result": {
+    "accepted": 5,
+    "rejected": 0
+  }
+}

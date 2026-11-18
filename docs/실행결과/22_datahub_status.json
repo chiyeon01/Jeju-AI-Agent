@@ -1,0 +1,148 @@
+{
+  "enabled": true,
+  "callsToday": {
+    "population": 12,
+    "sights_domestic": 8,
+    "wifi_usage": 15,
+    "wifi_users": 1
+  },
+  "regionCrowd": {
+    "date": "2026-08-31"
+  },
+  "datasets": [
+    {
+      "key": "population",
+      "title": "읍면동 단위 내국인 유동인구",
+      "source": "D2",
+      "hubId": 583,
+      "params": [
+        "startDate",
+        "endDate",
+        "city",
+        "emd",
+        "gender",
+        "ageGroup"
+      ],
+      "freshness": "일 단위, 약 2~3개월 지연 (확인 시 최신 2026-08-31)"
+    },
+    {
+      "key": "foreign_short",
+      "title": "읍면동 단위 외국인 단기체류 유동인구",
+      "source": "D2",
+      "hubId": 589,
+      "params": [
+        "startDate",
+        "endDate",
+        "city",
+        "emd",
+        "nationality"
+      ],
+      "freshness": "일 단위, 약 2~3개월 지연"
+    },
+    {
+      "key": "foreign_long",
+      "title": "읍면동 단위 외국인 장기체류 유동인구",
+      "source": "D2",
+      "hubId": 590,
+      "params": [
+        "startDate",
+        "endDate",
+        "city",
+        "emd",
+        "nationality"
+      ],
+      "freshness": "일 단위, 지연 있음"
+    },
+    {
+      "key": "weather",
+      "title": "일별 기상 정보",
+      "source": "D7",
+      "hubId": 579,
+      "params": [
+        "searchDate",
+        "observatoryName"
+      ],
+      "freshness": "일 단위이나 최근 데이터 없음 (2024-06 있음, 2025-11 없음) → 실시간 날씨로는 부족"
+    },
+    {
+      "key": "sights_domestic",
+      "title": "관광지별 내국인 유입자 수",
+      "source": "D4",
+      "hubId": 591,
+      "params": [
+        "startDate",
+        "endDate",
+        "sightsName",
+        "payType"
+      ],
+      "freshness": "월 단위, 2009-01 ~ 2024-12"
+    },
+    {
+      "key": "sights_foreign",
+      "title": "관광지별 외국인 유입자 수",
+      "source": "D4",
+      "hubId": 592,
+      "params": [
+        "startDate",
+        "endDate",
+        "sightsName",
+        "payType"
+      ],
+      "freshness": "월 단위, 2009-01 ~ 2024-12"
+    },
+    {
+      "key": "bus_stations",
+      "title": "버스 정류소 기본 정보",
+      "source": "D6",
+      "hubId": 612,
+      "params": [
+        "stationName"
+      ],
+      "freshness": "기준 정보 (매일 갱신)"
+    },
+    {
+      "key": "bus_routes",
+      "title": "버스 노선 기본 정보",
+      "source": "D6",
+      "hubId": 611,
+      "params": [
+        "startStationId"
+      ],
+      "freshness": "기준 정보 (매일 갱신)"
+    },
+    {
+      "key": "bus_usage",
+      "title": "일일 정류소별 버스 이용자 정보",
+      "source": "D6",
+      "hubId": 613,
+      "params": [
+        "startDate",
+        "endDate",
+        "moveType",
+        "priceType",
+        "payType"
+      ],
+      "freshness": "일 단위, 약 2~3개월 지연 · 하루 4~6천 건(40~60회 호출)"
+    },
+    {
+      "key": "wifi_usage",
+      "title": "와이파이 AP그룹별 일일 사용량",
+      "source": "D3",
+      "hubId": 593,
+      "params": [
+        "searchDate"
+      ],
+      "freshness": "일 단위, 약 2~3개월 지연"
+    },
+    {
+      "key": "wifi_users",
+      "title": "와이파이 일일 사용자수",
+      "source": "D3",
+      "hubId": 586,
+      "params": [
+        "searchDate"
+      ],
+      "freshness": "일 단위, 약 2~3개월 지연"
+    }
+  ]
+}

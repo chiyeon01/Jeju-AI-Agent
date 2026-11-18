@@ -1,0 +1,292 @@
+[
+  {
+    "id": "D2-583",
+    "name": "읍면동 단위 내국인 유동인구",
+    "cycle": "매일 API",
+    "basis": "2026-08-31",
+    "last": "11-18 20:54",
+    "rows": "688",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "D2-589",
+    "name": "읍면동 단위 외국인 단기체류 유동인구",
+    "cycle": "매일 API",
+    "basis": "-",
+    "last": "11-16 00:11",
+    "rows": "408",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "D2-590",
+    "name": "읍면동 단위 외국인 장기체류 유동인구",
+    "cycle": "매일 API",
+    "basis": "-",
+    "last": "-",
+    "rows": "-",
+    "status": "warn",
+    "note": "아직 받은 적 없음"
+  },
+  {
+    "id": "D7-579",
+    "name": "일별 기상 정보",
+    "cycle": "매일 API",
+    "basis": "-",
+    "last": "11-16 00:17",
+    "rows": "33",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "D4-591",
+    "name": "관광지별 내국인 유입자 수",
+    "cycle": "월 API",
+    "basis": "-",
+    "last": "11-16 00:12",
+    "rows": "33",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "D4-592",
+    "name": "관광지별 외국인 유입자 수",
+    "cycle": "월 API",
+    "basis": "-",
+    "last": "11-16 00:13",
+    "rows": "3",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "D6-612",
+    "name": "버스 정류소 기본 정보",
+    "cycle": "기준정보 API",
+    "basis": "-",
+    "last": "11-16 00:09",
+    "rows": "6",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "D6-611",
+    "name": "버스 노선 기본 정보",
+    "cycle": "기준정보 API",
+    "basis": "-",
+    "last": "11-16 00:09",
+    "rows": "745",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "D6-613",
+    "name": "일일 정류소별 버스 이용자 정보",
+    "cycle": "매일 API",
+    "basis": "-",
+    "last": "11-16 19:18",
+    "rows": "5,109",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "D3-593",
+    "name": "와이파이 AP그룹별 일일 사용량",
+    "cycle": "매일 API",
+    "basis": "-",
+    "last": "11-16 00:10",
+    "rows": "1,270",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "D3-586",
+    "name": "와이파이 일일 사용자수",
+    "cycle": "매일 API",
+    "basis": "-",
+    "last": "11-16 19:20",
+    "rows": "1",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "상가_음식점/제주특별자치도 상가(상권) 정보",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:10",
+    "rows": "57,865",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "상가_음식점/제주특별자치도음식점목록(통합)",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "51,111",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "상가_음식점/제주특별자치도음식점목록(통합)_인허가일에따른영업및폐업음식점수",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:10",
+    "rows": "640",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "유동인구_카드매출_매쉬업/제주특별자치도_주제3_상권분석을 위한 유동인구에 따른 카드 매출액 변화 데이터 활용_매쉬업결과_(2101~2105)",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "16,482",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "유동인구_카드매출_매쉬업/제주특별자치도_주제3_상권분석을 위한 유동인구에 따른 카드 매출액 변화 데이터 활용_매쉬업결과_17",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "26,968",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "유동인구_카드매출_매쉬업/제주특별자치도_주제3_상권분석을 위한 유동인구에 따른 카드 매출액 변화 데이터 활용_매쉬업결과_18",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "27,183",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "유동인구_카드매출_매쉬업/제주특별자치도_주제3_상권분석을 위한 유동인구에 따른 카드 매출액 변화 데이터 활용_매쉬업결과_19",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "27,416",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "유동인구_카드매출_매쉬업/제주특별자치도_주제3_상권분석을 위한 유동인구에 따른 카드 매출액 변화 데이터 활용_매쉬업결과_20(수정)",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "26,938",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "장소_리뷰/구글 관광지 리뷰 분석(리포트)_예시",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "-",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "장소_리뷰/구글 음식점 리뷰 분석(리포트)_예시",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:12",
+    "rows": "-",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "장소_리뷰/구글_관광지_리뷰분석_NXEGGTRRSRTAL_20210101",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "7,428",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "장소_리뷰/구글_음식점_리뷰분석_NXEGGRESTRTAL_20210101",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:12",
+    "rows": "19,154",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "장소_리뷰/제주도_숙박지,관광지,음식점_정보데이터(샘플)",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "-",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "장소_리뷰/제주도_숙박지,관광지,음식점_정보데이터(샘플)_210311",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "-",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "카드소비/메뉴별외식업매출액",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "1,820",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "카드소비/시간대별카드이용금액현황",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "8,673",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "카드소비/업종별성별카드이용정보",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:05",
+    "rows": "28,255",
+    "status": "ok",
+    "note": null
+  },
+  {
+    "id": "FILE",
+    "name": "카드소비/요일별카드이용건수비교",
+    "cycle": "파일",
+    "basis": "-",
+    "last": "11-15 23:11",
+    "rows": "10,684",
+    "status": "ok",
+    "note": null
+  }
+]

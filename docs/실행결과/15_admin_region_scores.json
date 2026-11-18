@@ -1,0 +1,141 @@
+{
+  "updatedAt": "2026-11-18T20:54:52",
+  "crowdDate": "2026-08-31",
+  "weights": {
+    "satisfaction": 0.5,
+    "demand": 0.3,
+    "comfort": 0.2
+  },
+  "regions": [
+    {
+      "regionId": "daejeong",
+      "name": "대정·안덕",
+      "score": 8.0,
+      "satisfaction": 7.3,
+      "demand": 10.0,
+      "comfort": 6.8,
+      "reviews": 5,
+      "avgStars": 4.2,
+      "courses7d": 0,
+      "reviews7d": 5,
+      "crowd": "낮음"
+    },
+    {
+      "regionId": "seogwipo",
+      "name": "서귀포 동지역",
+      "score": 5.1,
+      "satisfaction": 6.2,
+      "demand": 0.0,
+      "comfort": 10.0,
+      "reviews": 0,
+      "avgStars": null,
+      "courses7d": 0,
+      "reviews7d": 0,
+      "crowd": "낮음"
+    },
+    {
+      "regionId": "aewol",
+      "name": "애월읍",
+      "score": 5.0,
+      "satisfaction": 6.2,
+      "demand": 6.1,
+      "comfort": 0.0,
+      "reviews": 0,
+      "avgStars": null,
+      "courses7d": 2,
+      "reviews7d": 0,
+      "crowd": "높음"
+    },
+    {
+      "regionId": "namwon",
+      "name": "남원·표선",
+      "score": 4.8,
+      "satisfaction": 6.2,
+      "demand": 0.0,
+      "comfort": 8.5,
+      "reviews": 0,
+      "avgStars": null,
+      "courses7d": 0,
+      "reviews7d": 0,
+      "crowd": "낮음"
+    },
+    {
+      "regionId": "gujwa",
+      "name": "구좌",
+      "score": 4.8,
+      "satisfaction": 6.2,
+      "demand": 0.0,
+      "comfort": 8.5,
+      "reviews": 0,
+      "avgStars": null,
+      "courses7d": 0,
+      "reviews7d": 0,
+      "crowd": "낮음"
+    },
+    {
+      "regionId": "jeju-city",
+      "name": "제주시 동지역",
+      "score": 4.7,
+      "satisfaction": 6.2,
+      "demand": 0.0,
+      "comfort": 7.7,
+      "reviews": 0,
+      "avgStars": null,
+      "courses7d": 0,
+      "reviews7d": 0,
+      "crowd": "낮음"
+    },
+    {
+      "regionId": "jungmun",
+      "name": "중문",
+      "score": 4.7,
+      "satisfaction": 6.2,
+      "demand": 0.0,
+      "comfort": 7.7,
+      "reviews": 0,
+      "avgStars": null,
+      "courses7d": 0,
+      "reviews7d": 0,
+      "crowd": "낮음"
+    },
+    {
+      "regionId": "hallim",
+      "name": "한림·한경",
+      "score": 4.6,
+      "satisfaction": 6.2,
+      "demand": 0.0,
+      "comfort": 7.5,
+      "reviews": 0,
+      "avgStars": null,
+      "courses7d": 0,
+      "reviews7d": 0,
+      "crowd": "낮음"
+    },
+    {
+      "regionId": "seongsan",
+      "name": "성산",
+      "score": 4.6,
+      "satisfaction": 6.2,
+      "demand": 0.0,
+      "comfort": 7.5,
+      "reviews": 0,
+      "avgStars": null,
+      "courses7d": 0,
+      "reviews7d": 0,
+      "crowd": "낮음"
+    },
+    {
+      "regionId": "jocheon",
+      "name": "조천",
+      "score": 3.8,
+      "satisfaction": 6.2,
+      "demand": 0.0,
+      "comfort": 3.4,
+      "reviews": 0,
+      "avgStars": null,
+      "courses7d": 0,
+      "reviews7d": 0,
+      "crowd": "보통"
+    }
+  ]
+}

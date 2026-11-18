@@ -1,0 +1,27 @@
+{
+  "date": "2026-08-31",
+  "source": "D2",
+  "dataset": "읍면동 단위 내국인 유동인구",
+  "complete": true,
+  "emds": [
+    {
+      "city": "제주시",
+      "emd": "애월읍",
+      "region": "aewol",
+      "visitPop": 236508,
+      "resdPop": 668904,
+      "workPop": 103757
+    }
+  ],
+  "regions": [
+    {
+      "regionId": "aewol",
+      "regionName": "애월읍",
+      "emdCount": 1,
+      "visitPop": 236508,
+      "visitPopPerEmd": 236508,
+      "resdPop": 668904,
+      "workPop": 103757
+    }
+  ]
+}

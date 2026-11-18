@@ -1,0 +1,77 @@
+{
+  "start": "2024-12",
+  "end": "2024-12",
+  "source": "D4",
+  "items": [
+    {
+      "yearMonth": "202412",
+      "sightsName": "한라산국립공원",
+      "payType": "무료",
+      "domestic": 82146,
+      "foreign": 7421
+    },
+    {
+      "yearMonth": "202412",
+      "sightsName": "카멜리아힐",
+      "payType": "유료",
+      "domestic": 70900,
+      "foreign": 3385
+    },
+    {
+      "yearMonth": "202412",
+      "sightsName": "성산일출봉",
+      "payType": "유료",
+      "domestic": 44408,
+      "foreign": 14835
+    },
+    {
+      "yearMonth": "202412",
+      "sightsName": "중문대포해안주상절리대",
+      "payType": "유료",
+      "domestic": 44279,
+      "foreign": 8560
+    },
+    {
+      "yearMonth": "202412",
+      "sightsName": "산방산",
+      "payType": "유료",
+      "domestic": 49509,
+      "foreign": 1643
+    },
+    {
+      "yearMonth": "202412",
+      "sightsName": "천지연폭포",
+      "payType": "유료",
+      "domestic": 48064,
+      "foreign": 1875
+    },
+    {
+      "yearMonth": "202412",
+      "sightsName": "정방폭포",
+      "payType": "유료",
+      "domestic": 27945,
+      "foreign": 3474
+    },
+    {
+      "yearMonth": "202412",
+      "sightsName": "마라해양도립공원",
+      "payType": "유료",
+      "domestic": 29076,
+      "foreign": 0
+    },
+    {
+      "yearMonth": "202412",
+      "sightsName": "천제연폭포",
+      "payType": "유료",
+      "domestic": 20184,
+      "foreign": 2071
+    },
+    {
+      "yearMonth": "202412",
+      "sightsName": "절물자연휴양림",
+      "payType": "유료",
+      "domestic": 20574,
+      "foreign": 0
+    }
+  ]
+}

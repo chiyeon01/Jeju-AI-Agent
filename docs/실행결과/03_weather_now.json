@@ -1,0 +1,11 @@
+{
+  "code": "clear",
+  "label": "구름 조금",
+  "icon": "⛅",
+  "temp": 11.0,
+  "humidity": 75,
+  "wind": 9.66,
+  "rain1h": 0.0,
+  "source": "Open-Meteo",
+  "at": "20:45"
+}

@@ -1,0 +1,44 @@
+{
+  "topics": [
+    {
+      "topic": "맛",
+      "pos": 100,
+      "mentions": 3,
+      "summary": "음식 맛에 만족했어요"
+    },
+    {
+      "topic": "주차·접근성",
+      "pos": 0,
+      "mentions": 1,
+      "summary": "주차가 불편하다는 의견이 있어요"
+    },
+    {
+      "topic": "친절·서비스",
+      "pos": 100,
+      "mentions": 1,
+      "summary": "직원들이 친절하다는 반응이에요"
+    },
+    {
+      "topic": "양·반찬",
+      "pos": 100,
+      "mentions": 1,
+      "summary": "반찬이 푸짐하다는 평이에요"
+    },
+    {
+      "topic": "가격",
+      "pos": 0,
+      "mentions": 1,
+      "summary": "가격이 비싸다는 의견이 있어요"
+    },
+    {
+      "topic": "대기 시간",
+      "pos": 0,
+      "mentions": 1,
+      "summary": "웨이팅이 길었다는 의견이 있어요"
+    }
+  ],
+  "source": "gpt",
+  "reviewCount": 5,
+  "textCount": 5,
+  "createdAt": "2026-11-18T20:54:41"
+}

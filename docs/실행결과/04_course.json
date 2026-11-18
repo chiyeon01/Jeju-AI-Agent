@@ -1,0 +1,137 @@
+{
+  "weather": {
+    "code": "clear",
+    "label": "맑음",
+    "temp": 17,
+    "icon": "☀️",
+    "note": "강수 확률 10% · 풍속 3m/s"
+  },
+  "stops": [
+    {
+      "id": "p7",
+      "name": "앤트러사이트 제주 한림점",
+      "region": "hallim",
+      "kind": "cafe",
+      "lat": 33.4117,
+      "lon": 126.2693,
+      "indoor": true,
+      "rating": 4.4,
+      "stay": 50,
+      "seafood": false,
+      "reasons": [
+        [
+          "소개",
+          "옛 전분 공장을 고친 커피 로스터리"
+        ],
+        [
+          "D2",
+          "혼잡도 낮음 · 평소보다 12% 한산해요"
+        ]
+      ],
+      "no": 7,
+      "addr": "제주시 한림읍 한림로",
+      "label": null,
+      "tags": [
+        "카페",
+        "공장 개조"
+      ],
+      "at": "15:00",
+      "move": 0
+    },
+    {
+      "id": "p6",
+      "name": "협재해수욕장",
+      "region": "hallim",
+      "kind": "spot",
+      "lat": 33.394,
+      "lon": 126.2396,
+      "indoor": false,
+      "rating": 4.8,
+      "stay": 60,
+      "seafood": false,
+      "reasons": [
+        [
+          "소개",
+          "비양도가 보이는 에메랄드빛 얕은 해변"
+        ],
+        [
+          "D2",
+          "혼잡도 낮음 · 평소보다 12% 한산해요"
+        ]
+      ],
+      "no": 6,
+      "addr": "제주시 한림읍 협재리",
+      "label": null,
+      "tags": [
+        "해변",
+        "바다"
+      ],
+      "at": "16:02",
+      "move": 12
+    },
+    {
+      "id": "p8",
+      "name": "수월봉",
+      "region": "hallim",
+      "kind": "sunset",
+      "lat": 33.2956,
+      "lon": 126.1628,
+      "indoor": false,
+      "rating": 4.7,
+      "stay": 40,
+      "seafood": false,
+      "reasons": [
+        [
+          "소개",
+          "서쪽 끝 해안 절벽, 노을 명소"
+        ],
+        [
+          "D2",
+          "혼잡도 낮음 · 평소보다 12% 한산해요"
+        ]
+      ],
+      "no": 8,
+      "addr": "제주시 한경면 고산리",
+      "label": null,
+      "tags": [
+        "노을",
+        "지질공원"
+      ],
+      "at": "17:35",
+      "move": 33
+    },
+    {
+      "id": "p28",
+      "name": "부두식당",
+      "region": "daejeong",
+      "kind": "food",
+      "lat": 33.2172,
+      "lon": 126.2507,
+      "indoor": true,
+      "rating": 4.4,
+      "stay": 60,
+      "seafood": true,
+      "reasons": [
+        [
+          "소개",
+          "모슬포항 방어회 식당 (제철 11~2월)"
+        ],
+        [
+          "D2",
+          "혼잡도 낮음 · 평소 수준이에요"
+        ]
+      ],
+      "no": 28,
+      "addr": "서귀포시 대정읍 하모리",
+      "label": null,
+      "tags": [
+        "방어",
+        "해산물"
+      ],
+      "at": "18:46",
+      "move": 31
+    }
+  ],
+  "summary": null,
+  "source": null
+}

@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-16",
+  "source": "D3",
+  "totalUsers": 8809,
+  "apGroups": 1261,
+  "items": [
+    {
+      "apGroupName": "중앙로상점가",
+      "userCount": 514,
+      "sessionTimeSec": 534009,
+      "downloadMB": 7141.0
+    },
+    {
+      "apGroupName": "제주동문시장",
+      "userCount": 448,
+      "sessionTimeSec": 2523889,
+      "downloadMB": 78440.9
+    },
+    {
+      "apGroupName": "제주항국제여객터미널",
+      "userCount": 250,
+      "sessionTimeSec": 775675,
+      "downloadMB": 158467.1
+    },
+    {
+      "apGroupName": "제주국제공항",
+      "userCount": 250,
+      "sessionTimeSec": 219722,
+      "downloadMB": 12897.1
+    },
+    {
+      "apGroupName": "서귀포매일올레시장",
+      "userCount": 250,
+      "sessionTimeSec": 1151733,
+      "downloadMB": 62109.7
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "check": "이상치",
+    "target": "평가 이벤트",
+    "result": "1시간 내 과다 평가 계정 없음",
+    "level": "good"
+  },
+  {
+    "check": "좌표 범위",
+    "target": "추천 장소 위경도",
+    "result": "37곳 모두 제주 범위 안",
+    "level": "good"
+  },
+  {
+    "check": "쿼터",
+    "target": "데이터허브 일일 호출",
+    "result": "최다 읍면동 단위 내국인 유동인구 12회 / 한도 950",
+    "level": "good"
+  },
+  {
+    "check": "응답 오류",
+    "target": "데이터허브 API",
+    "result": "최근 실패 없음",
+    "level": "good"
+  },
+  {
+    "check": "파일 데이터",
+    "target": "data/ 폴더",
+    "result": "파일 18개",
+    "level": "good"
+  }
+]

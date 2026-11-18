@@ -1,0 +1,94 @@
+[
+  {
+    "step": "00_region_crowd_D2",
+    "seconds": 3.0
+  },
+  {
+    "step": "01_health",
+    "seconds": 0.0
+  },
+  {
+    "step": "02_profile_GPT",
+    "seconds": 3.7
+  },
+  {
+    "step": "03_weather_now",
+    "seconds": 0.5
+  },
+  {
+    "step": "04_course",
+    "seconds": 0.0
+  },
+  {
+    "step": "05_chat_seafood_GPT",
+    "seconds": 4.3
+  },
+  {
+    "step": "06_chat_seaview_GPT",
+    "seconds": 2.8
+  },
+  {
+    "step": "07_course_alternative_GPT",
+    "seconds": 5.2
+  },
+  {
+    "step": "08_reviews_submit",
+    "seconds": 0.1
+  },
+  {
+    "step": "09_owner_places",
+    "seconds": 0.0
+  },
+  {
+    "step": "10_owner_link_place",
+    "seconds": 0.0
+  },
+  {
+    "step": "11_owner_review_topics_GPT",
+    "seconds": 7.3
+  },
+  {
+    "step": "12_owner_review_analysis_GPT",
+    "seconds": 4.0
+  },
+  {
+    "step": "13_owner_ask_GPT",
+    "seconds": 6.8
+  },
+  {
+    "step": "14_admin_overview",
+    "seconds": 0.0
+  },
+  {
+    "step": "15_admin_region_scores",
+    "seconds": 0.0
+  },
+  {
+    "step": "16_admin_region_report_GPT",
+    "seconds": 9.4
+  },
+  {
+    "step": "17_admin_sources",
+    "seconds": 0.2
+  },
+  {
+    "step": "18_admin_quality",
+    "seconds": 0.0
+  },
+  {
+    "step": "19_datahub_population_aewol",
+    "seconds": 0.0
+  },
+  {
+    "step": "20_datahub_sights_top10",
+    "seconds": 0.4
+  },
+  {
+    "step": "21_datahub_wifi_top5",
+    "seconds": 1.7
+  },
+  {
+    "step": "22_datahub_status",
+    "seconds": 0.0
+  }
+]

@@ -1,0 +1,13 @@
+[
+  {
+    "id": "p28",
+    "no": 28,
+    "name": "부두식당",
+    "region": "daejeong",
+    "kind": "food",
+    "reviews": 5,
+    "avgStars": 4.2,
+    "lastReviewAt": "2026-11-18T20:54:33",
+    "regionName": "대정·안덕"
+  }
+]
