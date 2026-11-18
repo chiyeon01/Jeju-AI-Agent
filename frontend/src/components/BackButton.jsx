@@ -36,7 +36,8 @@ export function useBackHandler(fn) {
 
 const canGoBack = () => (window.history.state?.idx ?? 0) > 0;
 
-export default function BackButton({ fallback }) {
+/** home: 메뉴 첫 화면이면 true — 화면 안 단계 뒤로가기가 없을 때 버튼을 숨깁니다 */
+export default function BackButton({ fallback, home = false }) {
   const ctx = useContext(BackContext);
   const navigate = useNavigate();
   const handler = ctx?.handler;
@@ -47,6 +48,8 @@ export default function BackButton({ fallback }) {
     if (fallback) return navigate(fallback);
     return undefined;
   };
+  // 메뉴 첫 화면(홈)이거나 돌아갈 곳이 없으면 버튼을 아예 보이지 않습니다
+  if ((home && !handler) || !enabled) return null;
   return (
     <button type="button" className="back-btn" onClick={onClick} disabled={!enabled} aria-label="뒤로가기" title="뒤로가기">
       <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>

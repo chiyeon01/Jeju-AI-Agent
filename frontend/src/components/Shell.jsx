@@ -53,7 +53,7 @@ export default function Shell() {
     <BackProvider>
       <header className="topbar">
         <div className="topbar-inner">
-          <BackButton />
+          <BackButton home={NAV.some((n) => n.to === pathname) || pathname === '/'} />
           <Link to={HOME_BY_ROLE[user.role]} className="brand"><span className="dot" aria-hidden="true" /><span>제주<span className="space">잇다</span></span></Link>
           {items.length > 1 && (
             <nav className="topnav" aria-label="주 메뉴">
