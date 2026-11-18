@@ -111,12 +111,12 @@ export default function LocationStep({ profile, onDone, onBack }) {
   return (
     <section className="stack">
       <TypeCard profile={profile} />
-      <div className="card stack">
+      <div className="card raised stack">
         <div className="head" style={{ marginBottom: 0 }}>
-          <h3>어디에서 시작할까요?</h3>
-          <button className="btn sm" onClick={useCurrent} disabled={locating || !regions.length}>{locating ? '위치 찾는 중…' : '현재 위치 사용'}</button>
+          <h3 className="section-title"><span className="ico" aria-hidden="true">📍</span>어디에서 시작할까요?</h3>
+          <button className="btn sm" onClick={useCurrent} disabled={locating || !regions.length}>{locating ? '위치 찾는 중…' : '◎ 현재 위치 사용'}</button>
         </div>
-        <form className="chat-input" onSubmit={findAddress} style={{ marginTop: 0 }}>
+        <form className="locate-tools" onSubmit={findAddress}>
           <input className="input" value={address} onChange={(e) => setAddress(e.target.value)}
             placeholder="주소 입력 (예: 제주시 애월읍 애월해안로 272)" aria-label="출발 주소" />
           <button className="btn" type="submit" disabled={finding || !address.trim()}>{finding ? '찾는 중…' : '주소로 찾기'}</button>
@@ -138,8 +138,8 @@ export default function LocationStep({ profile, onDone, onBack }) {
       </div>
       <div className="row between">
         <button className="btn ghost" onClick={onBack}>여행 정보 다시 고르기</button>
-        <button className="btn primary" disabled={!region} onClick={() => onDone(region)}>
-          {region ? `${region.name}에서 코스 만들기` : '지역을 골라 주세요'}
+        <button className="btn primary lg" disabled={!region} onClick={() => onDone(region)}>
+          {region ? `${region.name}에서 코스 만들기 →` : '지역을 골라 주세요'}
         </button>
       </div>
     </section>

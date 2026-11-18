@@ -27,25 +27,29 @@ export default function PersonalityTest({ onDone }) {
     else setTimeout(() => setI((n) => n + 1), 150);
   };
 
-  if (i >= total) return <p className="muted">내 여행 유형을 분석하는 중…</p>;
+  if (i >= total) return <div className="card done-card"><span className="big" aria-hidden="true">🔎</span><p className="muted">내 여행 유형을 분석하는 중…</p></div>;
 
   const q = QUESTIONS[i];
   return (
-    <section className="stack">
-      <div className="row between">
-        <span className="label num">{i + 1} / {total}</span>
-        <button className="btn ghost sm" onClick={() => finish(SAMPLE)} disabled={loading}>{loading ? '분석 중…' : '예시 응답으로 건너뛰기'}</button>
+    <section className="stack" style={{ gap: 20 }}>
+      <div className="stack" style={{ gap: 10 }}>
+        <div className="row between">
+          <span className="label num">질문 {i + 1} / {total}</span>
+          <button className="btn ghost sm" onClick={() => finish(SAMPLE)} disabled={loading}>{loading ? '분석 중…' : '예시 응답으로 건너뛰기'}</button>
+        </div>
+        <div className="quiz-progress" aria-hidden="true"><span style={{ width: `${(i / total) * 100}%` }} /></div>
       </div>
-      <h2>{q.q}</h2>
+      <h2 className="quiz-q">{q.q}</h2>
       <div className="answers">
         {['a', 'b'].map((k) => (
           <button key={k} type="button" className={`answer ${answers[i] === k ? 'on' : ''}`} onClick={() => choose(k)}>
             <span className="big" aria-hidden="true">{q[k].icon}</span>
+            <span className="key">{k === 'a' ? 'A' : 'B'}</span>
             <span>{q[k].t}</span>
           </button>
         ))}
       </div>
-      {i > 0 && <button className="btn ghost sm" style={{ alignSelf: 'flex-start' }} onClick={() => setI(i - 1)}>이전 문항</button>}
+      {i > 0 && <button className="btn ghost sm" style={{ alignSelf: 'flex-start' }} onClick={() => setI(i - 1)}>← 이전 문항</button>}
     </section>
   );
 }

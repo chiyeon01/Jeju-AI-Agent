@@ -234,7 +234,8 @@ def linked_place(user_id: str) -> str | None:
 def merchant_places(q: str = "", limit: int = 50) -> list[dict]:
     """가게 연결용 장소 검색: 관광객이 앱에서 실제로 평점을 남긴 가게(식당·카페·실내 체험)만, DB 에서 바로 조회.
     평가가 하나도 없는 장소는 나오지 않습니다. 최근 평가 순."""
-    return db.rated_places(q.strip(), STORE_KINDS, limit)
+    names = {r["id"]: r["name"] for r in REGIONS}
+    return [{**p, "regionName": names.get(p["region"], p["region"])} for p in db.rated_places(q.strip(), STORE_KINDS, limit)]
 
 
 # ── 새 평가가 들어오면 자동 분석 ────────────────

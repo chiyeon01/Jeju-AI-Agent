@@ -45,7 +45,7 @@ export default function TripStep({ profile, onDone, onBack }) {
     <section className="stack">
       <TypeCard profile={profile} showTrip={false} />
       <h2>이번 여행은 어떻게 다니나요?</h2>
-      <div className="card stack">
+      <div className="card raised stack" style={{ gap: 20 }}>
         <div className="field"><span>동행</span>
           <div className="chips" role="radiogroup" aria-label="동행">
             {COMPANIONS.map((c) => <button key={c} type="button" role="radio" aria-checked={companion === c} className={`chip ${companion === c ? 'on' : ''}`} onClick={() => setCompanion(c)}>{c}</button>)}
@@ -68,11 +68,11 @@ export default function TripStep({ profile, onDone, onBack }) {
             </select>
           </label>
         </div>
-        {bad ? <p className="error" role="alert">{bad}</p> : <p className="small muted" style={{ margin: 0 }}>{span} 여행이에요.</p>}
+        {bad ? <p className="error" role="alert">{bad}</p> : <p className="weather-bar" style={{ margin: 0 }}>⏱️ 총 {span} 여행이에요</p>}
       </div>
       <div className="row between">
         <button className="btn ghost" onClick={onBack}>성향 테스트 다시 하기</button>
-        <button className="btn primary" disabled={!!bad} onClick={done}>출발 지역 고르기</button>
+        <button className="btn primary lg" disabled={!!bad} onClick={done}>출발 지역 고르기 →</button>
       </div>
     </section>
   );

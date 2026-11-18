@@ -62,7 +62,7 @@ export default function Signup() {
     <main className="auth">
       <div className="auth-back"><BackButton fallback="/login" /></div>
       <div className="card">
-        <div className="title"><h1>회원가입</h1></div>
+        <div className="title"><h1>회원가입</h1><p className="small muted">어떤 분으로 제주잇다를 쓰실지 골라 주세요</p></div>
         {done ? (
           <div className="stack">
             <p>{done.status === 'PENDING'
@@ -72,9 +72,13 @@ export default function Signup() {
           </div>
         ) : (
           <form className="stack" onSubmit={submit}>
-            <div className="seg" role="group" aria-label="계정 종류" style={{ alignSelf: 'center' }}>
-              <button type="button" className={!merchant ? 'on' : ''} onClick={() => setForm({ ...form, role: 'USER' })}>관광객</button>
-              <button type="button" className={merchant ? 'on' : ''} onClick={() => setForm({ ...form, role: 'MERCHANT' })}>상권 주인</button>
+            <div className="role-pick" role="radiogroup" aria-label="계정 종류">
+              <button type="button" role="radio" aria-checked={!merchant} className={`role-opt ${!merchant ? 'on' : ''}`} onClick={() => setForm({ ...form, role: 'USER' })}>
+                <span className="em" aria-hidden="true">🧳</span><b>관광객</b><span>코스 추천·평가</span>
+              </button>
+              <button type="button" role="radio" aria-checked={merchant} className={`role-opt ${merchant ? 'on' : ''}`} onClick={() => setForm({ ...form, role: 'MERCHANT' })}>
+                <span className="em" aria-hidden="true">🍊</span><b>상권 주인</b><span>내 가게 리뷰·AI 분석</span>
+              </button>
             </div>
             <label className="field"><span>이름</span><input className="input" value={form.name} onChange={set('name')} required /></label>
             <label className="field"><span>이메일</span><input className="input" type="email" value={form.email} onChange={set('email')} required /></label>
@@ -87,7 +91,7 @@ export default function Signup() {
               </>
             )}
             {error && <p className="error" role="alert">{error}</p>}
-            <button className="btn primary block" type="submit" disabled={busy}>{busy ? '보내는 중…' : '가입하기'}</button>
+            <button className="btn primary block lg" type="submit" disabled={busy}>{busy ? '보내는 중…' : '가입하기'}</button>
             <p className="small muted" style={{ textAlign: 'center' }}><Link to="/login">로그인으로 돌아가기</Link></p>
           </form>
         )}

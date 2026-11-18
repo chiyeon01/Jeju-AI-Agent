@@ -33,7 +33,17 @@ export default function MyPage() {
   return (
     <main className="page narrow">
       <div className="stack">
-        <h2>내 정보</h2>
+        <section className="hero">
+          <div className="profile-head">
+            <span className="avatar" aria-hidden="true" style={{ background: '#fff', color: 'var(--sky-deep)' }}>{(me.name || '?').slice(0, 1)}</span>
+            <div>
+              <span className="label">{ROLE_LABEL[me.role] ?? me.role} · {STATUS_LABEL[me.status] ?? me.status ?? '-'}</span>
+              <h2>{me.name}</h2>
+              <p className="small">{me.email}</p>
+            </div>
+          </div>
+        </section>
+        <h3 className="section-title"><span className="ico" aria-hidden="true">🪪</span>계정 정보</h3>
         <section className="card stack">
           <dl className="info">
             <dt>이름</dt><dd>{me.name}</dd>
@@ -47,7 +57,7 @@ export default function MyPage() {
           <p className="small muted">{isMock ? '목업 모드라 이 기기에 저장된 정보예요.' : '서버(/auth/me)에 저장된 정보예요.'}</p>
         </section>
 
-        <h2>설정</h2>
+        <h3 className="section-title"><span className="ico" aria-hidden="true">⚙️</span>설정</h3>
         <section className="card stack">
           <label className="field">
             <span className="row between"><span>화면 밝기</span><span className="num muted">{settings.brightness}%</span></span>

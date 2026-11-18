@@ -43,21 +43,21 @@ function Overview({ events, tick }) {
     clearTimeout(timer.current);
     timer.current = setTimeout(load, 2000);
   }, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!d) return <p className="muted">불러오는 중…</p>;
+  if (!d) return <div className="card"><div className="skeleton"><i /><i /><i /></div></div>;
   const o = d.overview;
   const pos = Object.fromEntries(d.health.map((h) => [h.regionId, h]));
   const rows = scores?.regions ?? [];
   return (
     <div className="stack">
       <div className="grid g4">
-        {[['오늘 방문 인증', o.visits], ['오늘 평가', o.reviews], ['오늘 만든 코스', o.courses], ['초당 이벤트', o.eventsPerSec]].map(([k, v]) => (
-          <div key={k} className="card metric"><span className="label">{k}</span><div className="v num">{v.toLocaleString()}</div></div>
+        {[['📍', '오늘 방문 인증', o.visits], ['⭐', '오늘 평가', o.reviews], ['🗺️', '오늘 만든 코스', o.courses], ['⚡', '초당 이벤트', o.eventsPerSec]].map(([ico, k, v]) => (
+          <div key={k} className="card raised metric"><span className="label"><span className="ico" aria-hidden="true">{ico}</span>{k}</span><div className="v num">{v.toLocaleString()}</div></div>
         ))}
       </div>
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <div className="card stack">
           <div className="head" style={{ marginBottom: 0 }}>
-            <h3>지역 점수 (0~10)</h3>
+            <h3 className="section-title"><span className="ico" aria-hidden="true">🏝️</span>지역 점수 (0~10)</h3>
             <span className="small muted">{scores ? `${fmtAt(scores.updatedAt)} 계산` : '계산 중…'}</span>
           </div>
           <p className="small muted" style={{ margin: 0 }}>관광객 별점 만족도 50% · 최근 7일 코스 선택과 평가 30% · 데이터허브 혼잡도 20%{scores?.crowdDate ? ` (${scores.crowdDate})` : ''}</p>
@@ -78,15 +78,15 @@ function Overview({ events, tick }) {
           </div>
         </div>
         <div className="card">
-          <div className="head"><h3>실시간 이벤트</h3><span className="live" aria-hidden="true" /></div>
+          <div className="head"><h3 className="section-title"><span className="ico" aria-hidden="true">📡</span>실시간 이벤트</h3><span className="pill good"><span className="live" aria-hidden="true" /> LIVE</span></div>
           <ul className="feed" aria-live="polite">
             {events.length === 0 && <li><span /><span className="muted">이벤트를 기다리는 중…</span></li>}
-            {events.map((e, i) => <li key={`${e.at}-${i}`}><span className="num muted">{e.at}</span><span><b>{e.type}</b> {e.text}</span></li>)}
+            {events.map((e, i) => <li key={`${e.at}-${i}`}><span className="num muted">{e.at}</span><span><span className="type">{e.type}</span>{e.text}</span></li>)}
           </ul>
         </div>
       </div>
       <div className="card">
-        <div className="head"><h3>장소별 평가 (고유 번호)</h3><span className="small muted">평가가 들어오면 사장님 화면에 바로 알리고 Agent가 분석해요</span></div>
+        <div className="head"><h3 className="section-title"><span className="ico" aria-hidden="true">🏷️</span>장소별 평가 (고유 번호)</h3><span className="small muted">평가가 들어오면 사장님 화면에 바로 알리고 Agent가 분석해요</span></div>
         <div className="table-wrap">
           <table className="data">
             <thead><tr><th className="r">번호</th><th>장소</th><th className="r">평가</th><th className="r">평균</th><th>사장님</th><th>최근 Agent 분석</th></tr></thead>
@@ -125,7 +125,7 @@ function Reports() {
     <div className="grid g2" style={{ alignItems: 'start', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)' }}>
       <div className="card stack">
         <div className="head" style={{ marginBottom: 0 }}>
-          <h3>저장된 보고서</h3>
+          <h3 className="section-title"><span className="ico" aria-hidden="true">📄</span>저장된 보고서</h3>
           <button className="btn sm primary" disabled={busy} onClick={make}>{busy ? '작성 중…' : '지금 보고서 만들기'}</button>
         </div>
         <p className="small muted" style={{ margin: 0 }}>Agent가 관광객 평가·코스 선택·지역 점수를 읽고 문서를 써서 Main PC에 저장해요. 허브 수치는 등급으로만 넘겨요.</p>
@@ -142,8 +142,8 @@ function Reports() {
           </ul>
         )}
       </div>
-      <div className="card">
-        {open ? <><h3 style={{ marginBottom: 8 }}>{open.title}</h3><Markdown text={open.body} /></> : <p className="muted">보고서를 고르거나 새로 만들어 주세요.</p>}
+      <div className="card raised">
+        {open ? <><div className="head"><h3>{open.title}</h3>{open.createdAt && <span className="small muted">{fmtAt(open.createdAt)} · {open.source === 'gpt' ? 'GPT 작성' : '규칙 기반'}</span>}</div><Markdown text={open.body} /></> : <div className="empty"><span className="big" aria-hidden="true">📄</span><p>보고서를 고르거나 새로 만들어 주세요.</p></div>}
       </div>
     </div>
   );
@@ -151,11 +151,11 @@ function Reports() {
 
 function DataTab() {
   const [d] = useLoad(getAdminData);
-  if (!d) return <p className="muted">불러오는 중…</p>;
+  if (!d) return <div className="card"><div className="skeleton"><i /><i /><i /></div></div>;
   return (
     <div className="stack">
       <div className="card stack">
-        <h3>원천 데이터 (제주데이터허브)</h3>
+        <h3 className="section-title"><span className="ico" aria-hidden="true">🗄️</span>원천 데이터 (제주데이터허브)</h3>
         <Progress3D
           label="정상 적재된 원천 데이터"
           value={d.sources.filter((s) => s.status === 'ok').length}
@@ -179,16 +179,20 @@ function DataTab() {
       </div>
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <div className="card stack">
-          <h3>파생 데이터</h3>
-          {d.derived.map((x) => (
-            <div key={x.name} className="row between small"><span><b>{x.name}</b> <span className="muted">{x.desc}</span></span><span className="pill">{x.lag}</span></div>
-          ))}
+          <h3 className="section-title"><span className="ico" aria-hidden="true">🧮</span>파생 데이터</h3>
+          <div>
+            {d.derived.map((x) => (
+              <div key={x.name} className="check-row"><span><b>{x.name}</b><br /><span className="muted small">{x.desc}</span></span><span className="pill">{x.lag}</span></div>
+            ))}
+          </div>
         </div>
         <div className="card stack">
-          <h3>품질 점검</h3>
-          {d.quality.map((x) => (
-            <div key={x.check + x.target} className="row between small"><span><b>{x.check}</b> {x.target} <span className="muted">· {x.result}</span></span><span className={`pill ${LEVEL[x.level]}`}>{x.level === 'good' ? '정상' : x.level === 'warn' ? '주의' : '조치'}</span></div>
-          ))}
+          <h3 className="section-title"><span className="ico" aria-hidden="true">✅</span>품질 점검</h3>
+          <div>
+            {d.quality.map((x) => (
+              <div key={x.check + x.target} className="check-row"><span><b>{x.check}</b> <span className="muted">{x.target}</span><br /><span className="small">{x.result}</span></span><span className={`pill ${LEVEL[x.level]}`}>{x.level === 'good' ? '정상' : x.level === 'warn' ? '주의' : '조치'}</span></div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -197,7 +201,7 @@ function DataTab() {
 
 function Security() {
   const [d, setD] = useLoad(getAdminSecurity);
-  if (!d) return <p className="muted">불러오는 중…</p>;
+  if (!d) return <div className="card"><div className="skeleton"><i /><i /><i /></div></div>;
   const approve = async (u) => {
     await updateUser(u.id, { status: 'ACTIVE' });
     setD({ ...d, users: d.users.map((x) => (x.id === u.id ? { ...x, status: 'ACTIVE' } : x)) });
@@ -205,7 +209,7 @@ function Security() {
   return (
     <div className="stack">
       <div className="card">
-        <h3 style={{ marginBottom: 10 }}>계정</h3>
+        <div className="head"><h3 className="section-title"><span className="ico" aria-hidden="true">👥</span>계정</h3>{d.users.some((u) => u.status === 'PENDING') && <span className="pill warn">승인 대기 {d.users.filter((u) => u.status === 'PENDING').length}명</span>}</div>
         <div className="table-wrap">
           <table className="data">
             <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th>최근 접속</th><th /></tr></thead>
@@ -222,7 +226,7 @@ function Security() {
       </div>
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <div className="card">
-          <h3 style={{ marginBottom: 10 }}>접근 기록</h3>
+          <h3 className="section-title" style={{ marginBottom: 10 }}><span className="ico" aria-hidden="true">🔐</span>접근 기록</h3>
           <div className="table-wrap">
             <table className="data">
               <tbody>
@@ -234,8 +238,8 @@ function Security() {
           </div>
         </div>
         <div className="card stack">
-          <h3>개인정보 보호 규칙</h3>
-          {d.masking.map((m) => <div key={m.rule} className="small"><b>{m.rule}</b> <span className="muted">{m.how}</span></div>)}
+          <h3 className="section-title"><span className="ico" aria-hidden="true">🛡️</span>개인정보 보호 규칙</h3>
+          <div>{d.masking.map((m) => <div key={m.rule} className="check-row"><b>{m.rule}</b><span className="muted small r">{m.how}</span></div>)}</div>
         </div>
       </div>
     </div>
@@ -386,13 +390,14 @@ export default function MainConsole() {
   }), []);
   return (
     <main className="page console">
-      <div className="console-head">
-        <div>
-          <h1>통합 관리</h1>
-          <p className="small muted">Main PC · 지금 화면의 자료를 엑셀 파일로 저장할 수 있어요</p>
+      <section className="hero console-head">
+        <div className="stack" style={{ gap: 6 }}>
+          <span className="label">Main PC · 제주시 데이터관리</span>
+          <h1>통합 관리 콘솔</h1>
+          <p className="small">지역 점수·실시간 이벤트·데이터허브 적재를 한 화면에서 보고, 엑셀로 저장할 수 있어요.</p>
         </div>
         <ExportButton events={events} />
-      </div>
+      </section>
       <div className="tabs" role="tablist">
         {TABS.map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? 'on' : ''} onClick={() => setTab(i)}>{t}</button>)}
       </div>

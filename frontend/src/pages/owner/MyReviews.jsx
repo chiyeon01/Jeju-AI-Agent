@@ -5,6 +5,7 @@ import Markdown from '../../components/Markdown.jsx';
 import { getMyReviews, getMerchantPlaces, linkMyPlace, analyzeMyReviews, subscribeMyStore } from '../../api/client.js';
 
 const KIND = { food: '식당', cafe: '카페', indoor: '실내 체험' };
+const KIND_ICON = { food: '🍜', cafe: '☕', indoor: '🎨', spot: '🌿', sunset: '🌅' };
 
 const REFRESH_MS = 10000; // 검색 목록을 다시 불러오는 간격 (새로 평가된 가게가 바로 보이게)
 
@@ -31,23 +32,22 @@ function LinkPlace({ onLinked, current }) {
     <form className="stack" style={{ gap: 8 }} onSubmit={save}>
       <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)}
              placeholder="가게 이름으로 검색" aria-label="내 가게 검색" />
-      <div className="stack" role="listbox" aria-label="평점을 받은 가게" style={{ gap: 4, maxHeight: 280, overflowY: 'auto' }}>
+      <div className="store-list" role="listbox" aria-label="평점을 받은 가게">
         {places === null && <span className="small muted">검색 중…</span>}
         {places?.length === 0 && (
           <span className="small muted">{q.trim() ? `'${q.trim()}'에 해당하는, 관광객 평점을 받은 가게가 없어요.` : '아직 관광객 평점을 받은 가게가 없어요. 관광객이 앱에서 평점을 남기면 여기에 나타나요.'}</span>
         )}
         {places?.map((p) => (
           <button key={p.id} type="button" role="option" aria-selected={pick === p.id}
-                  className={`btn sm ${pick === p.id ? 'primary' : 'ghost'}`}
-                  style={{ justifyContent: 'space-between', display: 'flex', textAlign: 'left' }}
-                  onClick={() => setPick(p.id)}>
-            <span>{p.no ? `#${p.no} ` : ''}{p.name} · {KIND[p.kind] ?? p.kind}</span>
-            <span className="num">★ {Number(p.avgStars).toFixed(1)} · {p.reviews}건</span>
+                  className="store-opt" onClick={() => setPick(p.id)}>
+            <span className="ico" aria-hidden="true">{KIND_ICON[p.kind] ?? '🏪'}</span>
+            <span><b>{p.name}</b><span className="meta">{p.no ? `#${p.no} · ` : ''}{[p.regionName ?? p.region, KIND[p.kind] ?? p.kind].filter(Boolean).join(' · ')}</span></span>
+            <span className="rate num">★ {Number(p.avgStars).toFixed(1)}<span className="meta" style={{ display: 'block', textAlign: 'right', fontWeight: 600 }}>{p.reviews}건</span></span>
           </button>
         ))}
       </div>
       <div className="row" style={{ gap: 8 }}>
-        <button className="btn primary" type="submit" disabled={!pick}>연결</button>
+        <button className="btn primary lg" type="submit" disabled={!pick}>이 가게로 연결</button>
         {err && <span className="small bad">{err}</span>}
       </div>
     </form>
@@ -90,11 +90,11 @@ export default function MyReviews({ onData }) {
     try { const a = await analyzeMyReviews(); setD((x) => ({ ...x, analysis: a })); } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
-  if (d === undefined) return <section className="card"><p className="muted">내 가게 평가를 불러오는 중…</p></section>;
+  if (d === undefined) return <section className="card"><div className="skeleton"><i /><i /><i /><span className="small muted">내 가게 평가를 불러오는 중…</span></div></section>;
   if (!d || relink) {
     return (
-      <section className="card stack">
-        <h3>내 가게 선택</h3>
+      <section className="card raised stack">
+        <h3 className="section-title"><span className="ico" aria-hidden="true">🔎</span>내 가게 선택</h3>
         <p className="small muted" style={{ margin: 0 }}>관광객 평점을 받은 가게만 검색돼요. 내 가게를 골라 연결하면 별점·리뷰와 AI 분석을 볼 수 있어요.</p>
         <LinkPlace current={d?.place?.id} onLinked={() => { setRelink(false); setD(undefined); load(); }} />
         {err && <p className="note">{err}</p>}
@@ -106,9 +106,9 @@ export default function MyReviews({ onData }) {
   return (
     <section className="grid g2" style={{ alignItems: 'start' }}>
       {toast && <div className="toast" role="status">{toast}</div>}
-      <div className="card stack">
+      <div className="card raised stack">
         <div className="head" style={{ marginBottom: 0 }}>
-          <h3>내 가게 별점·리뷰 <span className="live" aria-hidden="true" /></h3>
+          <h3 className="section-title"><span className="ico" aria-hidden="true">⭐</span>별점·리뷰 <span className="live" aria-hidden="true" title="실시간" /></h3>
           <button className="btn sm ghost" onClick={() => setRelink(true)}>가게 바꾸기</button>
         </div>
         <span className="small muted">{d.place.no ? `장소 #${d.place.no} · ` : ''}{d.place.name}{d.regionScore ? ` · ${d.regionScore.name} 지역 점수 ${d.regionScore.score}/10` : ''}</span>
@@ -131,16 +131,18 @@ export default function MyReviews({ onData }) {
         )}
         <h3 style={{ marginTop: 8 }}>최근 리뷰</h3>
         {d.reviews.length === 0 && <p className="small muted">아직 리뷰가 없어요.</p>}
-        {d.reviews.slice(0, 8).map((r) => (
-          <div key={r.id} className="stack" style={{ gap: 2, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
-            <div className="row between small"><Stars value={r.stars} /><span className="muted num">{r.createdAt.slice(5, 16).replace('T', ' ')}</span></div>
-            {r.text ? <p className="small">{r.text}</p> : <p className="small muted">별점만 남겼어요.</p>}
-          </div>
-        ))}
+        <div>
+          {d.reviews.slice(0, 8).map((r) => (
+            <div key={r.id} className="review-item">
+              <div className="row between small"><Stars value={r.stars} /><span className="muted num">{r.createdAt.slice(5, 16).replace('T', ' ')}</span></div>
+              {r.text ? <p className="quote">“{r.text}”</p> : <p className="small muted">별점만 남겼어요.</p>}
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="card stack">
+      <div className="card raised stack">
         <div className="head" style={{ marginBottom: 0 }}>
-          <h3>Agent 리뷰 분석</h3>
+          <h3 className="section-title"><span className="ico" aria-hidden="true">🤖</span>Agent 리뷰 분석</h3>
           <button className="btn sm primary" disabled={busy} onClick={analyze}>{busy ? '분석 중…' : d.analysis ? '다시 분석' : '분석하기'}</button>
         </div>
         {err && <p className="note">{err}</p>}

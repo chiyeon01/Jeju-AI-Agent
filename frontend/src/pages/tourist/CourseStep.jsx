@@ -145,8 +145,8 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
             <h2>오늘의 추천 코스</h2>
           </div>
         </div>
-        <div className="note row between" style={{ gap: 8 }}>
-          <span aria-live="polite">
+        <div className="weather-bar">
+          <span aria-live="polite"><span aria-hidden="true">{!opts ? '⏳' : live?.code === 'rain' ? '🌧️' : live ? '☀️' : '🌤️'} </span>
             {!opts ? '실시간 날씨를 불러오는 중…'
               : live ? `${weatherLine(live)}${indoorAsked ? ' · 요청대로 실내 위주' : ''}`
                 : '실시간 날씨를 불러오지 못했어요. 날씨와 상관없이 짠 코스예요'}
@@ -157,32 +157,40 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
           <span className="small muted">{course?.source === 'gpt' ? 'AI가 고른 코스예요' : '내 성향에 맞춰 짠 코스예요'} · 이름을 누르면 네이버 지도로 열려요</span>
           <button className="btn sm ghost" disabled={!course || busy} onClick={another}>{busy ? '찾는 중…' : '다른 코스 보기'}</button>
         </div>
-        <div className="card" aria-busy={!course}>
-          {!course ? <p className="muted">코스를 만드는 중…</p> : course.stops.map((s, i) => (
-            <div key={s.id} className="stop">
-              <span className="t num">{s.at}</span>
-              <div className="stack" style={{ gap: 4 }}>
-                {i > 0 && <span className="small muted">이동 약 {s.move}분</span>}
-                <div className="row" style={{ gap: 8 }}>
-                  <PlaceLink name={s.name} />
-                  <PlaceMeta name={s.name} kind={s.kind} label={s.label} addr={s.addr} />
-                </div>
-                <PlacePhoto name={s.name} />
-              </div>
-            </div>
-          ))}
+        <div className="card raised" aria-busy={!course}>
+          {!course ? <div className="skeleton" aria-label="코스를 만드는 중"><i /><i /><i /><span className="small muted">코스를 만드는 중…</span></div> : (
+            <ol className="timeline">
+              {course.stops.map((s, i) => (
+                <li key={s.id} className="stop">
+                  <span className="t num">{s.at}</span>
+                  <span className="rail"><i>{i + 1}</i></span>
+                  <div className="body">
+                    {i > 0 && <span className="move">🚗 이동 약 {s.move}분</span>}
+                    <div className="row">
+                      <PlaceLink name={s.name} />
+                      <PlaceMeta name={s.name} kind={s.kind} label={s.label} addr={s.addr} />
+                    </div>
+                    <PlacePhoto name={s.name} />
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
       </div>
 
       <div className="stack">
         <KakaoMap center={origin} level={9} path markers={(course?.stops ?? []).map((s) => ({ lat: s.lat, lon: s.lon, text: s.name }))} />
-        <div className="card">
-          <h3 style={{ marginBottom: 10 }}>대화로 코스 고치기</h3>
+        <div className="card raised chat-card">
+          <div className="ai-head">
+            <span className="ico" aria-hidden="true">✨</span>
+            <div><h3>대화로 코스 고치기</h3><span className="small muted">원하는 걸 말하면 AI가 코스를 바꿔요</span></div>
+          </div>
           <div className="chat" ref={chatRef} aria-live="polite">
             {msgs.map((m, i) => <div key={i} className={`bubble ${m.from}`}>{m.text}</div>)}
             {busy && <div className="bubble ai muted">코스를 고치는 중…</div>}
           </div>
-          <div className="chips" style={{ marginTop: 10 }}>
+          <div className="chips">
             {SUGGEST.map((s) => <button key={s} type="button" className="chip" disabled={busy || !course} onClick={() => send(s)}>{s}</button>)}
           </div>
           <form className="chat-input" onSubmit={(e) => { e.preventDefault(); send(); }}>
@@ -192,7 +200,7 @@ export default function CourseStep({ profile, origin, onDone, onBack }) {
         </div>
         <div className="row between">
           <button className="btn ghost" onClick={onBack}>위치 다시 고르기</button>
-          <button className="btn primary" disabled={!course} onClick={() => onDone(course, live)}>여행 끝, 평가하기</button>
+          <button className="btn primary lg" disabled={!course} onClick={() => onDone(course, live)}>여행 끝, 평가하기 →</button>
         </div>
       </div>
     </section>

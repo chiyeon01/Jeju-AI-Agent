@@ -9,12 +9,14 @@ import LocationStep from './LocationStep.jsx';
 import CourseStep from './CourseStep.jsx';
 import ReviewStep from './ReviewStep.jsx';
 
+const STEP_NAMES = ['성향 테스트', '여행 정보', '출발 지역', '추천 코스', '평가'];
+
 export default function TouristFlow() {
   const { user } = useAuth();
   const nav = useNavigate();
   // 홈에서 지난 유형을 고르면 성향 테스트를 건너뛰고 여행 정보(시간·이동 수단)부터
   const saved = useLocation().state?.profile ?? null;
-  const STEPS = 5;
+  const STEPS = STEP_NAMES.length;
   const [step, setStep] = useState(saved ? 1 : 0);
   const [profile, setProfile] = useState(saved);
   const [origin, setOrigin] = useState(null);
@@ -26,9 +28,11 @@ export default function TouristFlow() {
 
   return (
     <main className={`page ${step === 3 ? '' : 'narrow'}`}>
-      <div className="stepper" aria-label={`${step + 1} / ${STEPS} 단계`}>
-        {Array.from({ length: STEPS }, (_, i) => <div key={i} className={i <= step ? 'on' : ''} />)}
-      </div>
+      <ol className="stepper" style={{ '--steps': STEPS }} aria-label={`${step + 1} / ${STEPS} 단계 · ${STEP_NAMES[step]}`}>
+        {STEP_NAMES.map((name, i) => (
+          <li key={name} className={i === step ? 'on' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined}><span>{i + 1}. {name}</span></li>
+        ))}
+      </ol>
       {step === 0 && <PersonalityTest onDone={(p) => { setProfile(p); recordProfile(user.id, p); go(1); }} />}
       {step === 1 && <TripStep profile={profile} onBack={() => go(0)} onDone={(p) => { setProfile(p); go(2); }} />}
       {step === 2 && <LocationStep profile={profile} onBack={() => go(1)} onDone={(o) => { setOrigin(o); go(3); }} />}
