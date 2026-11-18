@@ -17,6 +17,7 @@ function LinkPlace({ onLinked, current }) {
   const [places, setPlaces] = useState(null); // null=불러오는 중
   const [pick, setPick] = useState(current ?? '');
   const [err, setErr] = useState('');
+  const [linking, setLinking] = useState(false);
   useEffect(() => {
     let alive = true;
     const load = () => getMerchantPlaces(q).then((p) => { if (alive) { setPlaces(p.filter((x) => Number(x.reviews) > 0)); setErr(''); } }).catch((e) => alive && setErr(e.message));
@@ -26,8 +27,9 @@ function LinkPlace({ onLinked, current }) {
   }, [q]);
   const save = async (e) => {
     e.preventDefault();
-    if (!pick) return;
-    try { await linkMyPlace(pick); onLinked(); } catch (x) { setErr(x.message); }
+    if (!pick || linking) return;
+    setLinking(true);
+    try { await linkMyPlace(pick); onLinked(); } catch (x) { setErr(x.message); setLinking(false); }
   };
   return (
     <form className="stack" style={{ gap: 16 }} onSubmit={save}>
@@ -46,7 +48,7 @@ function LinkPlace({ onLinked, current }) {
         ))}
       </div>
       {err && <p className="error">{err}</p>}
-      <div className="cta-bar sticky"><span /><button className="btn primary lg" type="submit" disabled={!pick}>이 가게로 시작하기</button></div>
+      <div className="cta-bar sticky"><span /><button className="btn primary lg" type="submit" disabled={!pick || linking}>{linking ? '연결하는 중…' : '이 가게로 시작하기'}</button></div>
     </form>
   );
 }

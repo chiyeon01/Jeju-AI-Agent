@@ -6,6 +6,7 @@ import { getLiveWeather, weatherLine } from '../../api/weather.js';
 import { planCourseAI, chatCourseAI } from '../../api/planner.js';
 import { applyHub } from '../../api/hub.js';
 import { addToCourse, keepAdded } from '../../api/courseEdit.js';
+import useIsMobile from '../../utils/useIsMobile.js';
 import { courseSummary, leaveAt, kakaoRouteUrl, duration } from '../../utils/format.js';
 
 // 대화로 코스 고치기 예시 (백엔드 대화 Agent 가 아이 동반·분위기 좋은 카페·해산물로 알아듣습니다)
@@ -29,9 +30,10 @@ function Why({ reasons }) {
   );
 }
 
-export default function CourseStep({ profile, origin, onDone, onSave, onBack }) {
+export default function CourseStep({ profile, origin, initial = null, onDone, onSave, onBack }) {
   const [opts, setOpts] = useState(null); // 날씨를 확인한 뒤 { weather, seafood, removeCount } 로 채웁니다
-  const [course, setCourse] = useState(null);
+  const [course, setCourse] = useState(initial); // 평가 단계에서 돌아오면 보던 코스 그대로
+  const restored = useRef(Boolean(initial));
   const [startTime, setStartTime] = useState(profile.startTime || '15:00');
   const [live, setLive] = useState(null);
   const [hub, setHub] = useState(null);
@@ -39,6 +41,7 @@ export default function CourseStep({ profile, origin, onDone, onSave, onBack }) 
   const [msgs, setMsgs] = useState([{ from: 'ai', text: `${origin.name}에서 출발하는 코스를 짜고 있어요.` }]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [leaving, setLeaving] = useState(false); // 다음 화면으로 넘어가는 중 (두 번 눌림 방지)
   const chatRef = useRef(null);
   const addedRef = useRef([]); // 대화로 추가한 장소 id (백엔드가 코스를 다시 짜도 유지)
   const seenRef = useRef(new Set()); // 지금까지 보여 준 장소 ("다른 코스 보기"에서 피함)
@@ -64,6 +67,7 @@ export default function CourseStep({ profile, origin, onDone, onSave, onBack }) 
   // 2) 코스 만들기: GPT(성향 + 실시간 날씨 + 출발지) → 안 되면 기존 방식
   useEffect(() => {
     if (!opts) return undefined;
+    if (restored.current) { restored.current = false; return undefined; }
     let alive = true;
     setCourse(null);
     (async () => {
@@ -150,7 +154,9 @@ export default function CourseStep({ profile, origin, onDone, onSave, onBack }) 
     }
   };
 
+  const isMobile = useIsMobile();
   const indoorAsked = opts?.weather === 'rain' && live?.code !== 'rain';
+  const map = <KakaoMap center={origin} level={isMobile ? 10 : 9} path markers={(course?.stops ?? []).map((s) => ({ lat: s.lat, lon: s.lon, text: s.name }))} />;
   const sum = course ? courseSummary(course.stops) : null;
   // 공유: 코스를 글로 복사 (휴대폰이면 공유 창)
   const [copied, setCopied] = useState(false);
@@ -178,7 +184,8 @@ export default function CourseStep({ profile, origin, onDone, onSave, onBack }) 
             {opts && !live && <button className="btn sm ghost" onClick={() => setLiveTry((n) => n + 1)}>다시 불러오기</button>}
           </div>
         </div>
-        <div className="row between" style={{ borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+        {isMobile && map}
+        <div className="row between course-tools">
           <span className="small muted">내 성향과 날씨·혼잡도에 맞춰 골랐어요</span>
           <div className="row" style={{ gap: 6 }}>
             <button className="btn sm" disabled={!course} onClick={share}>{copied ? '복사했어요' : '공유'}</button>
@@ -213,8 +220,8 @@ export default function CourseStep({ profile, origin, onDone, onSave, onBack }) 
         </div>
       </div>
 
-      <div className="stack" style={{ gap: 24, position: 'sticky', top: 80 }}>
-        <KakaoMap center={origin} level={9} path markers={(course?.stops ?? []).map((s) => ({ lat: s.lat, lon: s.lon, text: s.name }))} />
+      <div className="stack course-side" style={{ gap: 24 }}>
+        {!isMobile && map}
         <div className="chat-card">
           <div>
             <h3>바꾸고 싶은 점이 있나요?</h3>
@@ -233,8 +240,8 @@ export default function CourseStep({ profile, origin, onDone, onSave, onBack }) 
           </form>
         </div>
         <div className="cta-bar sticky">
-          <button className="btn" disabled={!course} onClick={() => onDone(course, live)}>바로 평가</button>
-          <button className="btn primary lg" disabled={!course} onClick={() => (onSave ?? onDone)(course, live)}>이 코스로 다녀올게요</button>
+          <button className="btn" disabled={!course || busy || leaving} onClick={() => { setLeaving(true); onDone(course, live); }}>바로 평가</button>
+          <button className="btn primary lg" disabled={!course || busy || leaving} onClick={() => { setLeaving(true); (onSave ?? onDone)(course, live); }}>{!course ? '코스 만드는 중…' : busy ? '코스 고치는 중…' : '이 코스로 다녀올게요'}</button>
         </div>
         <p className="small muted" style={{ marginTop: -12 }}>다녀온 뒤 홈에서 평가할 수 있어요.</p>
       </div>

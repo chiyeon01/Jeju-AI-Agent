@@ -1,6 +1,7 @@
 // 관광객 첫 화면: "지금 할 일" 하나를 먼저 보여 주고, 아래에 내 기록을 둡니다.
 // 순환 구조(성향 테스트 → 코스 추천 → 방문 → 평가)에서 지금 어디쯤인지에 따라 다음 행동이 바뀝니다.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { takeFlash } from '../../utils/flash.js';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { loadHistory, fmtWhen } from '../../api/history.js';
@@ -23,6 +24,10 @@ export default function TouristHome() {
     return [...seen.values()];
   }, [h.profiles]);
   const [pick, setPick] = useState(types[0]?.profile.code ?? null);
+  // 코스 저장·평가 보내기를 마치고 돌아오면 한 번 알려 줍니다
+  const [flash] = useState(takeFlash);
+  const [showFlash, setShowFlash] = useState(Boolean(flash));
+  useEffect(() => { if (!flash) return undefined; const t = setTimeout(() => setShowFlash(false), 3500); return () => clearTimeout(t); }, [flash]);
   const chosen = types.find((t) => t.profile.code === pick) ?? types[0] ?? null;
   const last = chosen?.profile ?? null;
   const avg = h.reviews.length ? (h.reviews.reduce((s, r) => s + r.stars, 0) / h.reviews.length).toFixed(1) : '-';
@@ -34,6 +39,7 @@ export default function TouristHome() {
 
   return (
     <main className="page narrow">
+      {showFlash && <div className="toast" role="status">{flash}</div>}
       <header className="page-head">
         <div>
           <span className="eyebrow">{greeting()}</span>

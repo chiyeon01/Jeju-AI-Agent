@@ -16,14 +16,27 @@ const scoreColor = (s) => (s >= 7 ? '#2e8b57' : s >= 5 ? '#87CEEB' : '#d0534a');
 const fmtAt = (iso) => (iso ? iso.slice(5, 16).replace('T', ' ') : '');
 const LEVEL = { ok: 'good', good: 'good', warn: 'warn', err: 'bad', bad: 'bad' };
 
+// 불러오기: 실패하면 스켈레톤이 계속 도는 대신 오류와 "다시 시도"를 보여 줍니다
 function useLoad(fn) {
   const [data, setData] = useState(null);
-  useEffect(() => { fn().then(setData); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  return [data, setData];
+  const [err, setErr] = useState('');
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    setErr('');
+    fn().then((x) => alive && setData(x)).catch((e) => alive && setErr(e.message));
+    return () => { alive = false; };
+  }, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  return [data, setData, err, () => setTick((t) => t + 1)];
+}
+
+function Loading({ err, retry }) {
+  if (err) return <div className="card"><p className="note bad">불러오지 못했어요. ({err})</p><button className="btn sm" style={{ marginTop: 10 }} onClick={retry}>다시 시도</button></div>;
+  return <div className="card"><div className="skeleton"><i /><i /><i /></div></div>;
 }
 
 function Overview({ events, tick }) {
-  const [d] = useLoad(getAdminOverview);
+  const [d, , err, retry] = useLoad(getAdminOverview);
   const [scores, setScores] = useState(null);
   const [places, setPlaces] = useState(null);
   const timer = useRef(null);
@@ -43,7 +56,7 @@ function Overview({ events, tick }) {
     clearTimeout(timer.current);
     timer.current = setTimeout(load, 2000);
   }, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!d) return <div className="card"><div className="skeleton"><i /><i /><i /></div></div>;
+  if (!d) return <Loading err={err} retry={retry} />;
   const o = d.overview;
   const pos = Object.fromEntries(d.health.map((h) => [h.regionId, h]));
   const rows = scores?.regions ?? [];
@@ -149,8 +162,8 @@ function Reports() {
 }
 
 function DataTab() {
-  const [d] = useLoad(getAdminData);
-  if (!d) return <div className="card"><div className="skeleton"><i /><i /><i /></div></div>;
+  const [d, , err, retry] = useLoad(getAdminData);
+  if (!d) return <Loading err={err} retry={retry} />;
   return (
     <div className="stack">
       <div className="card stack">
@@ -199,11 +212,16 @@ function DataTab() {
 }
 
 function Security() {
-  const [d, setD] = useLoad(getAdminSecurity);
-  if (!d) return <div className="card"><div className="skeleton"><i /><i /><i /></div></div>;
+  const [d, setD, err, retry] = useLoad(getAdminSecurity);
+  const [pending, setPending] = useState(null);
+  if (!d) return <Loading err={err} retry={retry} />;
   const approve = async (u) => {
-    await updateUser(u.id, { status: 'ACTIVE' });
-    setD({ ...d, users: d.users.map((x) => (x.id === u.id ? { ...x, status: 'ACTIVE' } : x)) });
+    if (pending) return;
+    setPending(u.id);
+    try {
+      await updateUser(u.id, { status: 'ACTIVE' });
+      setD((cur) => ({ ...cur, users: cur.users.map((x) => (x.id === u.id ? { ...x, status: 'ACTIVE' } : x)) }));
+    } catch (e) { window.alert(`승인하지 못했어요: ${e.message}`); } finally { setPending(null); }
   };
   return (
     <div className="stack">
@@ -216,7 +234,7 @@ function Security() {
               {d.users.map((u) => (
                 <tr key={u.id ?? u.name}>
                   <td>{u.name}</td><td className="muted">{u.email}</td><td>{ROLE_LABEL[u.role]}</td><td className="num">{u.last}</td>
-                  <td className="r">{u.status === 'PENDING' ? <button className="btn sm primary" onClick={() => approve(u)}>가입 승인</button> : <span className={`pill ${u.status === 'ACTIVE' ? 'good' : 'bad'}`}>{u.status === 'ACTIVE' ? '사용 중' : '정지'}</span>}</td>
+                  <td className="r">{u.status === 'PENDING' ? <button className="btn sm primary" disabled={!!pending} onClick={() => approve(u)}>{pending === u.id ? '승인 중…' : '가입 승인'}</button> : <span className={`pill ${u.status === 'ACTIVE' ? 'good' : 'bad'}`}>{u.status === 'ACTIVE' ? '사용 중' : '정지'}</span>}</td>
                 </tr>
               ))}
             </tbody>

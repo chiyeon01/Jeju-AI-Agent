@@ -86,15 +86,17 @@ function ActionForm() {
   const [action, setAction] = useState('');
   const [saved, setSaved] = useState([]);
   const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
   const submit = async (e) => {
     e.preventDefault();
-    if (!action.trim()) return;
+    if (!action.trim() || saving) return;
     setErr('');
+    setSaving(true);
     try {
       await registerAction({ kind: '메뉴·이벤트', title: action });
       setSaved((s) => [{ title: action, at: new Date() }, ...s]);
       setAction('');
-    } catch (x) { setErr(x.message); }
+    } catch (x) { setErr(x.message); } finally { setSaving(false); }
   };
   return (
     <div className="split">
@@ -106,7 +108,7 @@ function ActionForm() {
           {IDEAS.map((x) => <button key={x} type="button" className="chip sm" onClick={() => setAction(x)}>{x}</button>)}
         </div>
         {err && <p className="error">{err}</p>}
-        <button className="btn primary" type="submit" disabled={!action.trim()} style={{ alignSelf: 'flex-start' }}>등록하기</button>
+        <button className="btn primary" type="submit" disabled={!action.trim() || saving} style={{ alignSelf: 'flex-start' }}>{saving ? '등록하는 중…' : '등록하기'}</button>
       </form>
       <div className="stack" style={{ gap: 4 }}>
         <span className="label">등록한 조치</span>

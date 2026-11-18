@@ -22,14 +22,17 @@ export default function ReviewStep({ course, profile, onRestart, onSent }) {
 
   const submit = async (e) => {
     e.preventDefault();
+    if (sending) return;
     setSending(true);
+    setError('');
     try {
       const res = await submitReviews(ready.map((s) => ({ placeId: s.id, stars: form[s.id].stars, text: form[s.id].text, profile: profile?.code ?? /\(([A-Z]{4})\)/.exec(course?.type ?? '')?.[1] })));
-      onSent?.(ready.map((s) => ({ placeId: s.id, name: s.name, stars: form[s.id].stars, text: form[s.id].text })));
-      setDone(res);
+      const items = ready.map((s) => ({ placeId: s.id, name: s.name, stars: form[s.id].stars, text: form[s.id].text }));
+      // 보낸 뒤에는 바로 홈으로 (같은 평가를 다시 보내거나 끝난 화면에 머무르지 않게)
+      if (onSent) onSent(items, res); else setDone(res);
+      return;
     } catch (err) {
-      setError(err.message);
-    } finally {
+      setError(`보내지 못했어요. 다시 눌러 주세요. (${err.message})`);
       setSending(false);
     }
   };

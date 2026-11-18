@@ -415,7 +415,7 @@ ul.list .btn.on { background: var(--surface-2); color: var(--ink); }
 .region-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .region-tags span { font-size: .78rem; font-weight: 600; color: var(--ink-2); background: #fff; border-radius: 6px; padding: 2px 8px; }
 .locate-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
-@media (max-width: 520px) { .locate-tools { grid-template-columns: minmax(0, 1fr); } }
+
 
 /* ── 장소 링크 · 사진 ──────────────────────── */
 .place-link { font-weight: 700; font-size: 1rem; color: var(--ink); text-decoration: none; }
@@ -476,10 +476,95 @@ table.data .bar-col { width: 20%; min-width: 110px; }
 .section[id] { scroll-margin-top: 112px; }
 
 /* 코스 세부 */
-.course-sum { display: flex; flex-wrap: wrap; gap: 4px 0; font-size: .9rem; color: var(--ink-2); }
-.course-sum > * + *::before { content: '·'; margin: 0 8px; color: var(--line-strong); }
+.course-sum { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .9rem; color: var(--ink-2); }
 .course-sum b { color: var(--brand-text); }
 .stop-actions { display: flex; gap: 14px; font-size: .82rem; }
 .stop-actions a { color: var(--muted); font-weight: 600; text-decoration: none; }
 .stop-actions a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .chip.sm { height: 32px; padding: 0 12px; font-size: .82rem; }
+
+/* ── 로딩 표시 ─────────────────────────────── */
+.spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--brand); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
+.btn[disabled] { pointer-events: none; }
+
+/* ── 앱뷰 · 작은 화면 ──────────────────────── */
+html { -webkit-text-size-adjust: 100%; }
+body { overflow-x: hidden; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+img, svg, video { max-width: 100%; }
+button, a, .chip, .answer, .store-opt { touch-action: manipulation; }
+.topbar { padding-top: env(safe-area-inset-top, 0px); }
+.course-tools { border-top: 1px solid var(--line); padding-top: 16px; }
+.course-side { position: sticky; top: 80px; }
+.rows .title, .store-opt b, .place-link { overflow-wrap: anywhere; }
+@media (hover: none) {
+  .btn:hover:not(:disabled) { background: var(--surface-2); }
+  .btn.primary:hover:not(:disabled) { background: var(--brand); }
+  .chip:hover { border-color: var(--line-strong); }
+  .answer:hover { border-color: var(--line-strong); }
+  .btn:active:not(:disabled), .chip:active, .answer:active, .store-opt:active { opacity: .7; }
+}
+@media (max-width: 720px) {
+  /* 하단 탭이 있는 화면: 고정 버튼을 탭 위로 */
+  .has-tabbar .cta-bar.sticky { bottom: calc(57px + env(safe-area-inset-bottom, 0px)); }
+  .has-tabbar .page { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+  html:not(.has-tabbar) .page { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+  .cta-bar.sticky .btn.lg { height: 50px; }
+  .course-side { position: static; }
+  .course-tools { border-top: 0; padding-top: 0; }
+  .split { gap: 28px; }
+  .section { padding: 24px 0; }
+  .grid { gap: 20px; }
+  .map { aspect-ratio: 4 / 3; border-radius: 10px; }
+  .toast { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  html:not(.has-tabbar) .toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 480px) {
+  body { font-size: 15px; }
+  h1, .page-head h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.15rem; }
+  .quiz-q { font-size: 1.3rem; }
+  .page { padding-left: 16px; padding-right: 16px; }
+  .topbar-inner { padding: 0 12px 0 16px; }
+  .page-head { gap: 14px; padding-bottom: 18px; }
+  .page-head .figures { width: 100%; }
+  .figure { flex: 1; padding: 0 12px; }
+  .figure .v { font-size: 1.15rem; }
+  .next { padding: 18px; border-radius: 14px; gap: 14px; }
+  .next h2 { font-size: 1.1rem; }
+  .btn.lg { height: 50px; font-size: .95rem; }
+  .input, .select { height: 48px; font-size: 16px; }   /* 16px 미만이면 iOS 가 확대합니다 */
+  .chip { height: 36px; padding: 0 13px; font-size: .86rem; }
+  .stop { grid-template-columns: 40px 18px minmax(0, 1fr); gap: 0 10px; }
+  .stop .t { font-size: .82rem; }
+  .stop .rail i { width: 18px; height: 18px; font-size: .65rem; }
+  .why li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .why li b { justify-self: start; }
+  .place-photo { max-width: 100%; }
+  .answer { padding: 16px; }
+  .info { grid-template-columns: 88px 1fr; }
+  .review-card .row.between { flex-wrap: nowrap; }
+  .stars button { font-size: 1.55rem; }
+  .flow-nav { overflow-x: auto; flex-wrap: nowrap; margin: 0 -16px 4px; padding: 8px 16px; scrollbar-width: none; }
+  .flow-nav::-webkit-scrollbar { display: none; }
+  .flow-nav a { white-space: nowrap; }
+  .tabs { margin-left: -16px; margin-right: -16px; padding: 0 8px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { padding: 12px 12px; font-size: .9rem; }
+  .kpis .v { font-size: 1.35rem; }
+  .kpis > div { padding: 14px; }
+  :root[data-theme="admin"] .card { padding: 16px; border-radius: 10px; }
+  .console-head .export { width: 100%; justify-items: stretch; }
+  .section-head { align-items: center; }
+  .store-opt { gap: 10px; }
+  .auth-main > div { gap: 22px; }
+}
+@media (max-width: 480px) {
+  /* 숫자 요약: 좁은 화면에서는 3칸 격자로 (글자가 세로로 꺾이지 않게) */
+  .figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 16px; }
+  .figure, .figure:first-child { padding: 0; border-left: 0; }
+  .figure .k, .figure .v { white-space: nowrap; }
+  .figure .k { font-size: .76rem; }
+  table.data td:first-child, table.data th { white-space: nowrap; }
+}

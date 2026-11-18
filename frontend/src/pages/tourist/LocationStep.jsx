@@ -60,9 +60,9 @@ function RegionFeature({ region, profile }) {
 // 제주 범위 (백엔드 /regions/nearest 가 받는 범위와 같음)
 const inJeju = (lat, lon) => lat >= 32.9 && lat <= 34.1 && lon >= 125.9 && lon <= 127.1;
 
-export default function LocationStep({ profile, onDone, onBack }) {
+export default function LocationStep({ profile, initial = null, onDone, onBack }) {
   const [regions, setRegions] = useState([]);
-  const [region, setRegion] = useState(null);
+  const [region, setRegion] = useState(initial); // 이전 단계로 돌아왔다 다시 오면 고른 지역 유지
   const [note, setNote] = useState('');
 
   useEffect(() => { getRegions().then(setRegions); }, []);
@@ -120,7 +120,7 @@ export default function LocationStep({ profile, onDone, onBack }) {
       <form className="locate-tools" onSubmit={findAddress}>
         <input className="input" value={address} onChange={(e) => setAddress(e.target.value)}
           placeholder="주소 입력 (예: 애월읍 애월해안로 272)" aria-label="출발 주소" />
-        <button className="btn" type="submit" disabled={finding || !address.trim()}>{finding ? '찾는 중…' : '주소로 찾기'}</button>
+        <button className="btn" type="submit" disabled={finding || !address.trim()}>{finding ? '찾는 중…' : '찾기'}</button>
       </form>
       <div className="field"><span>지역에서 고르기</span>
         <div className="chips">

@@ -47,6 +47,12 @@ export default function Shell() {
     return () => { delete document.documentElement.dataset.theme; };
   }, [theme]);
   const initial = (user.name || '?').trim().slice(0, 1);
+  // 코스 만들기 단계 화면에서는 하단 탭을 숨기고 그 자리에 "다음" 버튼을 둡니다 (앱처럼 한 가지 일에 집중)
+  const tabbar = !pathname.startsWith('/tourist/new');
+  useEffect(() => {
+    document.documentElement.classList.toggle('has-tabbar', tabbar);
+    return () => document.documentElement.classList.remove('has-tabbar');
+  }, [tabbar]);
   // 모바일 하단 메뉴: 메뉴 + 내 정보 (메뉴가 하나뿐인 역할도 내 정보로 바로 갈 수 있게)
   const bottom = [...items, { to: '/me', label: '내 정보', icon: 'me' }];
   return (
@@ -71,9 +77,9 @@ export default function Shell() {
         </div>
       </header>
       <Outlet />
-      <nav className="bottomnav" aria-label="하단 메뉴">
+      {tabbar && <nav className="bottomnav" aria-label="하단 메뉴">
         {bottom.map((n) => <NavLink key={n.to} to={n.to}>{ICONS[n.icon]}<span>{n.label}</span></NavLink>)}
-      </nav>
+      </nav>}
     </BackProvider>
   );
 }
