@@ -6,7 +6,6 @@
 import { config } from '../config.js';
 import { PLACES, REGIONS, WEATHER, scoreAnswers } from '../mock/tourist.js';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, TEST_ACCOUNTS } from '../mock/auth.js';
-import { STORE, SCORE_TREND, INDICATORS, WEEKLY_REPORT, REVIEW_TOPICS, RECENT_REVIEWS, OWNER_QA } from '../mock/owner.js';
 import {
   REGION_HEALTH, EVENT_SAMPLES, SOURCES, DERIVED, QUALITY, ACCOUNTS, ACCESS_LOG, MASKING, BACKUPS, RETENTION,
 } from '../mock/console.js';
@@ -345,34 +344,24 @@ export async function submitReviews(reviews) {
 }
 
 // ── 상권 주인 ──────────────────────────────
-/** 대시보드에 필요한 값을 한 번에 가져옵니다 (백엔드에서는 엔드포인트 6개) */
-export async function getOwnerDashboard() {
-  if (!isMock) {
-    const [store, score, trend, indicators, report, topics, reviews] = await Promise.all([
-      get('/owner/store'), get('/owner/score'), get('/owner/score/trend?weeks=12'), get('/owner/indicators'),
-      get('/owner/report/weekly'), get('/owner/reviews/topics'), get('/owner/reviews?limit=4'),
-    ]);
-    return { store, score, trend, indicators, report, topics, reviews };
-  }
-  await wait(400);
-  return {
-    store: { id: STORE.id, name: STORE.name, category: STORE.category, dong: STORE.dong },
-    score: { score: STORE.score, delta: STORE.scoreDelta, percentile: STORE.percentile, peers: STORE.peers, basis: STORE.basis },
-    trend: { values: SCORE_TREND, labels: SCORE_TREND.map((_, i) => (i === SCORE_TREND.length - 1 ? '이번 주' : `${SCORE_TREND.length - 1 - i}주 전`)) },
-    indicators: INDICATORS,
-    report: WEEKLY_REPORT,
-    topics: REVIEW_TOPICS,
-    reviews: RECENT_REVIEWS,
-  };
+// 대시보드는 사장님이 연결한 내 가게에 관광객이 실제로 남긴 평가로만 만듭니다 (시연용 고정 데이터 없음).
+/** GET /owner/reviews/topics → { topics:[{ topic, pos, mentions, summary }], source:'gpt'|'rule', reviewCount, textCount, createdAt }
+ *  리뷰 주제별 반응: 백엔드 GPT 가 프롬프트(backend/app/prompts/review_topics.md)로 분석 */
+export async function getReviewTopics() {
+  if (isMock) return { topics: [], source: 'rule', reviewCount: 0, textCount: 0, createdAt: new Date().toISOString() };
+  return get('/owner/reviews/topics');
 }
 
-export const OWNER_SUGGESTED_QUESTIONS = Object.keys(OWNER_QA);
+export const OWNER_SUGGESTED_QUESTIONS = [
+  '손님들이 가장 아쉬워하는 점은 뭐예요?',
+  '별점을 올리려면 무엇부터 바꿀까요?',
+  '어떤 성향의 손님이 많이 오나요?',
+];
 
-/** POST /owner/ask — 상권 분석 Agent */
+/** POST /owner/ask — 상권 분석 Agent (내 가게 별점·리뷰가 근거) */
 export async function askOwnerAgent(question) {
   if (!isMock) return post('/owner/ask', { question });
-  await wait(600);
-  return { answer: OWNER_QA[question] || '시연 화면에서는 예시 질문에만 답해요. 백엔드를 연결하면 상권 분석 Agent가 근거와 함께 답합니다.' };
+  return { answer: '백엔드에 연결하면 상권 분석 Agent가 내 가게 리뷰를 근거로 답해요.' };
 }
 
 /** POST /owner/actions */

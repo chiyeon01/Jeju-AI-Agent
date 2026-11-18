@@ -15,7 +15,6 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../config.dart';
 import '../data/auth_mock.dart';
 import '../data/console_mock.dart' as cm;
-import '../data/owner_mock.dart' as om;
 import '../data/tourist_mock.dart';
 import 'hub.dart';
 
@@ -515,43 +514,19 @@ Future<int> submitReviews(List<Json> reviews) async {
 }
 
 // ── 상권 주인 ───────────────────────────────
-/// GET /owner/store · score · score/trend · indicators · report/weekly · reviews/topics · reviews
-Future<Json> getOwnerDashboard() async {
-  if (!isMock) {
-    final r = await Future.wait([
-      _get('/owner/store'), _get('/owner/score'), _get('/owner/score/trend?weeks=12'), _get('/owner/indicators'),
-      _get('/owner/report/weekly'), _get('/owner/reviews/topics'), _get('/owner/reviews?limit=4'),
-    ]);
-    return {'store': r[0], 'score': r[1], 'trend': r[2], 'indicators': r[3], 'report': r[4], 'topics': r[5], 'reviews': r[6]};
-  }
-  await _wait(400);
-  final s = om.store;
-  final n = om.scoreTrend.length;
-  return {
-    'store': {'id': s.id, 'name': s.name, 'category': s.category, 'dong': s.dong},
-    'score': {'score': s.score, 'delta': s.scoreDelta, 'percentile': s.percentile, 'peers': s.peers, 'basis': s.basis},
-    'trend': {'values': om.scoreTrend, 'labels': [for (var i = 0; i < n; i++) i == n - 1 ? '이번 주' : '${n - 1 - i}주 전']},
-    'indicators': [
-      for (final m in om.indicators)
-        {'key': m.key, 'name': m.name, 'value': m.value, 'unit': m.unit, 'delta': m.delta, 'good': m.good, 'src': m.src, 'basis': m.basis}
-    ],
-    'report': {
-      'week': om.weeklyWeek,
-      'summary': om.weeklySummary,
-      'actions': [for (final a in om.weeklyActions) {'title': a.title, 'why': a.why, 'impact': a.impact}],
-    },
-    'topics': [for (final t in om.reviewTopics) {'topic': t.$1, 'pos': t.$2, 'mentions': t.$3}],
-    'reviews': [for (final r in om.recentReviews) {'stars': r.stars, 'text': r.text, 'type': r.type, 'at': r.at}],
-  };
+/// GET /owner/reviews/topics → {topics:[{topic, pos, mentions, summary}], source:'gpt'|'rule', reviewCount, textCount, createdAt}
+/// 리뷰 주제별 반응: 내 가게 리뷰를 백엔드 GPT 가 프롬프트(backend/app/prompts/review_topics.md)로 분석
+Future<Json> getReviewTopics() async {
+  if (isMock) return {'topics': [], 'source': 'rule', 'reviewCount': 0, 'textCount': 0};
+  return await _get('/owner/reviews/topics') as Json;
 }
 
-final ownerSuggestedQuestions = om.ownerQa.keys.toList();
+const ownerSuggestedQuestions = ['손님들이 가장 아쉬워하는 점은 뭐예요?', '별점을 올리려면 무엇부터 바꿀까요?', '어떤 성향의 손님이 많이 오나요?'];
 
-/// POST /owner/ask → { answer }
+/// POST /owner/ask → { answer } (내 가게 별점·리뷰가 근거)
 Future<String> askOwnerAgent(String question) async {
   if (!isMock) return (await _post('/owner/ask', {'question': question}) as Json)['answer'] ?? '';
-  await _wait(600);
-  return om.ownerQa[question] ?? '시연 화면에서는 예시 질문에 답해요. 백엔드를 연결하면 상권 분석 Agent가 답합니다.';
+  return '백엔드에 연결하면 상권 분석 Agent가 내 가게 리뷰를 근거로 답해요.';
 }
 
 /// POST /owner/actions

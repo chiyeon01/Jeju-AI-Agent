@@ -12,7 +12,9 @@ import '../../widgets/ui.dart';
 String _at(String? iso) => iso == null || iso.length < 16 ? '' : iso.substring(5, 16).replaceFirst('T', ' ');
 
 class MyReviews extends StatefulWidget {
-  const MyReviews({super.key});
+  const MyReviews({super.key, this.onData});
+  /// 연결된 내 가게 데이터가 바뀌면 알려 줍니다 (가게 미연결·다시 고르는 중이면 null)
+  final void Function(Json? d)? onData;
   @override
   State<MyReviews> createState() => _MyReviewsState();
 }
@@ -77,6 +79,7 @@ class _MyReviewsState extends State<MyReviews> {
       final d = await getMyReviews();
       if (!mounted) return;
       setState(() => _d = d);
+      widget.onData?.call(d);
       _subscribe((d?['place'] as Json?)?['id'] as String?);
       if (d == null) await _loadPlaces();
     } catch (e) {
@@ -103,7 +106,7 @@ class _MyReviewsState extends State<MyReviews> {
     if (!quiet && mounted) setState(() => _searching = true);
     try {
       final p = await getMerchantPlaces(_q.text);
-      if (mounted) setState(() { _places = p; _err = ''; });
+      if (mounted) setState(() { _places = p.where((x) => ((x['reviews'] as num?) ?? 0) > 0).toList(); _err = ''; });
     } catch (e) {
       if (mounted) setState(() => _err = '$e');
     } finally {
@@ -146,8 +149,8 @@ class _MyReviewsState extends State<MyReviews> {
     if (d == null || _relink) {
       return AppCard(
         child: VStack(gap: 10, children: [
-          const T.h3('내 가게 별점·리뷰'),
-          const T.muted('관광객이 코스를 다녀와 남긴 별점·리뷰를 보려면 내 가게를 검색해 연결해 주세요. 관광객 평점을 받은 가게만 검색돼요.', size: 13),
+          const T.h3('내 가게 선택'),
+          const T.muted('관광객 평점을 받은 가게만 검색돼요. 내 가게를 골라 연결하면 별점·리뷰와 AI 분석을 볼 수 있어요.', size: 13),
           AppInput(key: const ValueKey('place-search'), controller: _q, hint: '가게 이름으로 검색', onChanged: _onQuery),
           if (_searching && _places.isEmpty) const T.muted('검색 중…', size: 13),
           if (!_searching && _places.isEmpty)
@@ -189,6 +192,7 @@ class _MyReviewsState extends State<MyReviews> {
         child: VStack(gap: 10, children: [
           Between(left: const T.h3('내 가게 별점·리뷰'), right: Btn('가게 바꾸기', small: true, ghost: true, onPressed: () {
             setState(() { _relink = true; _pick = (d['place'] as Json)['id']; });
+            widget.onData?.call(null);
             _loadPlaces();
           })),
           T.muted('${(d['place'] as Json)['name']}${(d['place'] as Json)['no'] != null ? ' · 장소 #${(d['place'] as Json)['no']}' : ''}${region != null ? ' · ${region['name']} 지역 점수 ${region['score']}/10' : ''}', size: 13),

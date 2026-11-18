@@ -3,10 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { signup } from '../api/client.js';
 import { useAuth, HOME_BY_ROLE } from '../auth/AuthContext.jsx';
 import BackButton from '../components/BackButton.jsx';
-import { PLACES } from '../mock/tourist.js';
 
 // 관광객 평가를 받는 장소 중 가게가 될 수 있는 곳 (가입 후 내 가게 별점·리뷰를 보려면 연결)
-const STORE_PLACES = PLACES.filter((p) => ['food', 'cafe', 'indoor'].includes(p.kind));
 
 // 백엔드 /auth/signup 규칙과 같게 미리 확인해, 서버의 영어 검증 문구 대신 한국어로 알려 줍니다
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -25,7 +23,7 @@ export function checkSignup(f) {
 
 // 관리자 계정은 화면에서 만들 수 없습니다. 관리자가 콘솔에서 직접 만듭니다.
 export default function Signup() {
-  const [form, setForm] = useState({ role: 'USER', email: '', password: '', name: '', storeName: '', businessNo: '', placeId: '' });
+  const [form, setForm] = useState({ role: 'USER', email: '', password: '', name: '', storeName: '', businessNo: '' });
   const [error, setError] = useState('');
   const [done, setDone] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -42,7 +40,7 @@ export default function Signup() {
     setError('');
     try {
       const body = { email: form.email.trim().toLowerCase(), password: form.password, name: form.name.trim(), role: form.role };
-      if (merchant) Object.assign(body, { storeName: form.storeName.trim(), businessNo: form.businessNo.replace(/\D/g, ''), ...(form.placeId ? { placeId: form.placeId } : {}) });
+      if (merchant) Object.assign(body, { storeName: form.storeName.trim(), businessNo: form.businessNo.replace(/\D/g, '') });
       const user = await signup(body);
       // 관광객은 바로 쓸 수 있으니 가입한 정보로 로그인까지 이어서 합니다
       if (user.status === 'ACTIVE') {
@@ -85,12 +83,6 @@ export default function Signup() {
               <>
                 <label className="field"><span>상호</span><input className="input" value={form.storeName} onChange={set('storeName')} required /></label>
                 <label className="field"><span>사업자등록번호</span><input className="input" inputMode="numeric" placeholder="000-00-00000" value={form.businessNo} onChange={set('businessNo')} required /></label>
-                <label className="field"><span>관광객 평가를 받을 내 가게 (선택)</span>
-                  <select className="input" value={form.placeId} onChange={set('placeId')}>
-                    <option value="">나중에 연결할게요</option>
-                    {STORE_PLACES.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </label>
                 <p className="note">상권 주인 계정은 관리자 승인 후 사용할 수 있어요.</p>
               </>
             )}

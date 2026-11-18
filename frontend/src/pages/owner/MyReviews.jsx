@@ -16,7 +16,8 @@ function LinkPlace({ onLinked, current }) {
   const [err, setErr] = useState('');
   useEffect(() => {
     let alive = true;
-    const load = () => getMerchantPlaces(q).then((p) => { if (alive) { setPlaces(p); setErr(''); } }).catch((e) => alive && setErr(e.message));
+    // 평가 수가 없는 장소는 혹시 백엔드가 예전 버전이어도 보이지 않게 한 번 더 거릅니다
+    const load = () => getMerchantPlaces(q).then((p) => { if (alive) { setPlaces(p.filter((x) => Number(x.reviews) > 0)); setErr(''); } }).catch((e) => alive && setErr(e.message));
     const t = setTimeout(load, 250);
     const iv = setInterval(load, REFRESH_MS);
     return () => { alive = false; clearTimeout(t); clearInterval(iv); };
@@ -53,7 +54,7 @@ function LinkPlace({ onLinked, current }) {
   );
 }
 
-export default function MyReviews() {
+export default function MyReviews({ onData }) {
   const [d, setD] = useState(undefined); // undefined=불러오는 중, null=연결 안 됨
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -62,6 +63,7 @@ export default function MyReviews() {
   const toastTimer = useRef(null);
   const load = () => getMyReviews().then(setD).catch((e) => { setErr(e.message); setD(null); });
   useEffect(() => { load(); }, []);
+  useEffect(() => { if (d !== undefined) onData?.(relink ? null : d); }, [d, relink]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 실시간: 내 가게에 새 평가가 오면 알림 + 목록 새로고침, Agent 가 분석을 저장하면 결과 새로고침
   const placeId = d?.place?.id;
@@ -92,8 +94,8 @@ export default function MyReviews() {
   if (!d || relink) {
     return (
       <section className="card stack">
-        <h3>내 가게 별점·리뷰</h3>
-        <p className="small muted" style={{ margin: 0 }}>관광객이 코스를 다녀와 남긴 별점·리뷰를 보려면 내 가게를 검색해 연결해 주세요. 관광객 평점을 받은 가게만 검색돼요.</p>
+        <h3>내 가게 선택</h3>
+        <p className="small muted" style={{ margin: 0 }}>관광객 평점을 받은 가게만 검색돼요. 내 가게를 골라 연결하면 별점·리뷰와 AI 분석을 볼 수 있어요.</p>
         <LinkPlace current={d?.place?.id} onLinked={() => { setRelink(false); setD(undefined); load(); }} />
         {err && <p className="note">{err}</p>}
       </section>

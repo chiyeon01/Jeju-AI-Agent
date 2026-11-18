@@ -71,7 +71,8 @@ def signup(req: SignupRequest) -> dict:
         "business_no": business_no or None,
     }
     db.insert_user(user)
-    if merchant and req.placeId in PLACES_BY_ID:
+    # 내 가게는 관광객 평점을 받은 가게만 연결 (보통은 로그인 후 '내 가게 선택'에서 고릅니다)
+    if merchant and req.placeId in PLACES_BY_ID and db.is_rated_place(req.placeId):
         db.set_store_place(user_id, req.placeId)
     if merchant:
         events.publish(events.STORE, f"{user['store_name']} · 가입 신청 (승인 대기)", user_id=user_id)

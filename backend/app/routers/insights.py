@@ -74,7 +74,7 @@ def places(q: str = Query("", max_length=40), limit: int = Query(50, ge=1, le=20
 
 @router.get("/owner/place")
 def my_place(user: dict = Depends(merchant)) -> dict:
-    pid = db.get_store_place(user["id"])
+    pid = svc.linked_place(user["id"])
     p = svc.PLACES_BY_ID.get(pid) if pid else None
     return {"placeId": pid if p else None,
             "place": {**{k: p[k] for k in ("id", "name", "region", "kind")}, "no": db.place_no(p["id"])} if p else None}
@@ -91,15 +91,15 @@ def link_place(req: PlaceLink, user: dict = Depends(merchant)) -> dict:
 
 @router.get("/owner/my-reviews")
 def my_reviews(user: dict = Depends(merchant)) -> dict:
-    return svc.my_reviews(db.get_store_place(user["id"]))
+    return svc.my_reviews(svc.linked_place(user["id"]))
 
 
 @router.post("/owner/my-reviews/analysis", status_code=201)
 def analyze(user: dict = Depends(merchant)) -> dict:
-    return svc.analyze_my_reviews(svc.place_or_404(db.get_store_place(user["id"]))["id"], user["id"])
+    return svc.analyze_my_reviews(svc.place_or_404(svc.linked_place(user["id"]))["id"], user["id"])
 
 
 @router.get("/owner/my-reviews/analysis")
 def analyses(user: dict = Depends(merchant)) -> list[dict]:
-    pid = svc.place_or_404(db.get_store_place(user["id"]))["id"]
+    pid = svc.place_or_404(svc.linked_place(user["id"]))["id"]
     return db.list_reports("STORE", pid, 10)

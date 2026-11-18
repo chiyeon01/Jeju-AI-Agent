@@ -221,6 +221,16 @@ def analyze_my_reviews(place_id: str, user_id: str) -> dict:
 STORE_KINDS = ("food", "cafe", "indoor")
 
 
+def linked_place(user_id: str) -> str | None:
+    """사장님이 연결한 가게. 관광객 평점을 받은 가게(식당·카페·실내 체험)일 때만 인정합니다
+    (예전에 평점 없는 장소로 연결해 둔 계정은 다시 '내 가게 선택'부터 하게 됩니다)."""
+    pid = db.get_store_place(user_id)
+    p = PLACES_BY_ID.get(pid) if pid else None
+    if not p or p["kind"] not in STORE_KINDS or not db.is_rated_place(pid):
+        return None
+    return pid
+
+
 def merchant_places(q: str = "", limit: int = 50) -> list[dict]:
     """가게 연결용 장소 검색: 관광객이 앱에서 실제로 평점을 남긴 가게(식당·카페·실내 체험)만, DB 에서 바로 조회.
     평가가 하나도 없는 장소는 나오지 않습니다. 최근 평가 순."""

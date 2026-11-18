@@ -1,9 +1,10 @@
-// 상권 주인: 내 가게 별점·리뷰·Agent 분석, 건강 점수, 주간 추이, AI 제안, 세부 지표, 리뷰, AI 질문, 메뉴·이벤트 등록
+// 상권 주인 대시보드 (React 의 pages/owner/OwnerDashboard.jsx 와 같음)
+// 처음 들어오면 내 가게(관광객 평점을 받은 가게)를 먼저 고르고, 연결된 뒤에만 아래 분석이 열립니다.
+// 모든 값은 관광객이 앱에서 실제로 남긴 별점·리뷰로 만듭니다 (시연용 고정 데이터 없음).
 import 'package:material_ui/material_ui.dart';
 
 import '../../api/client.dart';
 import '../../theme.dart';
-import '../../widgets/charts.dart';
 import '../../widgets/ui.dart';
 import 'my_reviews.dart';
 
@@ -14,21 +15,14 @@ class OwnerDashboard extends StatefulWidget {
 }
 
 class _OwnerDashboardState extends State<OwnerDashboard> {
-  Json? _d;
-  String _dashErr = '';
-  final List<(bool, String)> _chat = [(false, '가게 지표에 대해 궁금한 점을 물어보세요.')];
+  Json? _d; // 연결된 내 가게 (null 이면 가게 선택 화면)
+  Json? _topics;
+  String _topicsErr = '';
+  int? _topicsFor; // 주제 분석을 불러온 리뷰 수 (새 평가가 오면 다시 불러옴)
+  final List<(bool, String)> _chat = [(false, '관광객 별점·리뷰에 대해 궁금한 점을 물어보세요.')];
   bool _asking = false;
   final _action = TextEditingController();
   final List<String> _saved = [];
-
-  @override
-  void initState() {
-    super.initState();
-    // 상권 지표 대시보드는 지표가 준비된 매장만 열립니다. 아니어도 내 가게 별점·리뷰는 볼 수 있어요
-    getOwnerDashboard().then((d) => mounted ? setState(() => _d = d) : null).catchError((Object e) {
-      if (mounted) setState(() => _dashErr = '$e');
-    });
-  }
 
   @override
   void dispose() {
@@ -36,12 +30,29 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     super.dispose();
   }
 
+  void _onData(Json? d) {
+    setState(() => _d = d);
+    final count = ((d?['summary'] as Json?)?['count'] as num?)?.toInt();
+    if (d != null && count != _topicsFor) {
+      _topicsFor = count;
+      setState(() { _topics = null; _topicsErr = ''; });
+      getReviewTopics().then((t) => mounted ? setState(() => _topics = t) : null).catchError((Object e) {
+        if (mounted) setState(() => _topicsErr = '$e');
+      });
+    }
+  }
+
   Future<void> _ask(String q) async {
     setState(() {
       _asking = true;
       _chat.add((true, q));
     });
-    final a = await askOwnerAgent(q);
+    String a;
+    try {
+      a = await askOwnerAgent(q);
+    } catch (e) {
+      a = '$e';
+    }
     if (!mounted) return;
     setState(() {
       _asking = false;
@@ -59,134 +70,68 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     });
   }
 
+  Widget _topicsCard() {
+    final t = _topics;
+    final topics = [...((t?['topics'] as List?) ?? const []).cast<Json>()]..sort((a, b) => (a['pos'] as num).compareTo(b['pos'] as num));
+    return AppCard(
+      child: VStack(gap: 12, children: [
+        Between(
+          left: const T.h3('리뷰 주제별 반응'),
+          right: t == null ? const SizedBox.shrink() : T.muted('${t['source'] == 'gpt' ? 'GPT 분석' : '규칙 기반 분석'} · 리뷰 ${t['textCount']}건', size: 13),
+        ),
+        if (_topicsErr.isNotEmpty) Note(_topicsErr),
+        if (t == null && _topicsErr.isEmpty) const T.muted('GPT가 리뷰를 읽고 있어요…', size: 13),
+        if (t != null && topics.isEmpty) const T.muted('아직 분석할 리뷰 글이 없어요. 관광객이 한 줄 평을 남기면 주제별로 정리해 드려요.', size: 13),
+        for (final x in topics)
+          VStack(gap: 4, children: [
+            Between(
+              left: Wrap(spacing: 6, children: [T.small(x['topic']), if ((x['pos'] as num) < 60) const Pill('개선 필요', tone: 'bad')]),
+              right: T.muted('긍정 ${x['pos']}% · ${x['mentions']}건', size: 13),
+            ),
+            Bar((x['pos'] as num) / 100, color: (x['pos'] as num) < 60 ? C.bad : C.sky),
+            if ((x['summary'] ?? '').toString().isNotEmpty) T.muted(x['summary'], size: 13),
+          ]),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final d = _d;
-    if (d == null) {
-      return PageBody(children: [
-        const T.h1('내 가게'),
-        const MyReviews(),
-        Note(_dashErr.isEmpty ? '상권 지표를 불러오는 중…' : '상권 지표: $_dashErr'),
-      ]);
-    }
-    final store = d['store'] as Json, score = d['score'] as Json, trend = d['trend'] as Json, report = d['report'] as Json;
-    final delta = score['delta'] as num;
-    final topics = [...(d['topics'] as List).cast<Json>()]..sort((a, b) => (a['pos'] as num).compareTo(b['pos'] as num));
-
+    final place = d?['place'] as Json?;
+    final region = d?['regionScore'] as Json?;
     return PageBody(children: [
-      VStack(gap: 2, children: [T.label('${store['dong']} · ${store['category']}'), T.h1(store['name'])]),
-      const MyReviews(),
-      Grid(cols: 2, children: [
-        AppCard(
-          child: VStack(gap: 8, children: [
-            const T.label('상권 건강 점수'),
-            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('${score['score']}', style: tx(size: 48, weight: FontWeight.w700, color: C.skyDeep, height: 1)),
-              const SizedBox(width: 6),
-              const T.muted('/ 100'),
-            ]),
-            Wrap(spacing: 8, runSpacing: 6, children: [
-              Pill('${delta >= 0 ? '▲' : '▼'} ${delta.abs()}점 지난주 대비', tone: delta >= 0 ? 'good' : 'bad'),
-              Pill('같은 업종 ${score['peers']}곳 중 상위 ${100 - (score['percentile'] as num)}%'),
-            ]),
-          ]),
-        ),
-        AppCard(
-          child: VStack(gap: 10, children: [
-            const Between(left: T.h3('주간 추이'), right: T.muted('최근 12주')),
-            LineChart(
-              data: [for (final v in trend['values'] as List) (v as num).toDouble()],
-              labels: (trend['labels'] as List).cast<String>(),
+      if (place == null)
+        const T.h1('내 가게를 선택해 주세요')
+      else
+        VStack(gap: 2, children: [
+          T.label([if (region != null) region['name'], storeKinds[place['kind']] ?? place['kind']].join(' · ')),
+          T.h1(place['name']),
+        ]),
+      MyReviews(onData: _onData),
+      if (place != null)
+        Grid(cols: 2, children: [
+          _topicsCard(),
+          VStack(children: [
+            ChatPanel(
+              title: 'AI에게 물어보기',
+              messages: _chat,
+              suggestions: ownerSuggestedQuestions,
+              onSend: _ask,
+              busy: _asking,
+              hint: '예: 평일 저녁 손님을 늘리려면?',
+              sendLabel: '질문',
+            ),
+            AppCard(
+              child: VStack(gap: 12, children: [
+                const VStack(gap: 2, children: [T.h3('메뉴·이벤트 등록'), T.muted('등록하면 관광객 코스 추천 문구에 반영돼요.')]),
+                AppInput(controller: _action, hint: '예: 17~19시 커플 세트', onChanged: (_) => setState(() {}), onSubmitted: (_) => _register()),
+                Btn('등록하기', primary: true, block: true, onPressed: _action.text.trim().isEmpty ? null : _register),
+                for (final s in _saved) Between(left: T.small(s), right: const Pill('등록됨', tone: 'good')),
+              ]),
             ),
           ]),
-        ),
-      ]),
-      AppCard(
-        child: VStack(gap: 12, children: [
-          Between(left: const T.h3('이번 주 AI 제안'), right: T.muted(report['week'])),
-          T(report['summary'], size: 15),
-          Grid(cols: 3, children: [
-            for (final a in (report['actions'] as List).cast<Json>())
-              AppCard(
-                color: C.surface2,
-                border: false,
-                padding: 14,
-                child: VStack(gap: 4, cross: CrossAxisAlignment.start, children: [
-                  T(a['title'], weight: FontWeight.w700),
-                  T.muted(a['why'], size: 13),
-                  Pill(a['impact']),
-                ]),
-              ),
-          ]),
         ]),
-      ),
-      Grid(cols: 3, children: [for (final m in (d['indicators'] as List).cast<Json>()) _Indicator(m)]),
-      Grid(cols: 2, children: [
-        AppCard(
-          child: VStack(gap: 12, children: [
-            const T.h3('리뷰 주제별 반응'),
-            for (final t in topics)
-              VStack(gap: 4, children: [
-                Between(
-                  left: Wrap(spacing: 6, children: [T.small(t['topic']), if ((t['pos'] as num) < 60) const Pill('개선 필요', tone: 'bad')]),
-                  right: T.muted('긍정 ${t['pos']}% · ${t['mentions']}건', size: 13),
-                ),
-                Bar((t['pos'] as num) / 100, color: (t['pos'] as num) < 60 ? C.bad : C.sky),
-              ]),
-            const SizedBox(height: 4),
-            const T.h3('최근 리뷰'),
-            for (final r in (d['reviews'] as List).cast<Json>())
-              Container(
-                padding: const EdgeInsets.only(top: 10),
-                decoration: const BoxDecoration(border: Border(top: BorderSide(color: C.line))),
-                child: VStack(gap: 2, children: [
-                  Between(left: Align(alignment: Alignment.centerLeft, child: Stars(value: r['stars'])), right: T.muted(r['at'], size: 13)),
-                  T.small(r['text']),
-                ]),
-              ),
-          ]),
-        ),
-        VStack(children: [
-          ChatPanel(
-            title: 'AI에게 물어보기',
-            messages: _chat,
-            suggestions: ownerSuggestedQuestions,
-            onSend: _ask,
-            busy: _asking,
-            hint: '예: 평일 저녁 손님을 늘리려면?',
-            sendLabel: '질문',
-          ),
-          AppCard(
-            child: VStack(gap: 12, children: [
-              const VStack(gap: 2, children: [T.h3('메뉴·이벤트 등록'), T.muted('등록하면 관광객 코스 추천 문구에 반영돼요.')]),
-              AppInput(controller: _action, hint: '예: 17~19시 커플 세트', onChanged: (_) => setState(() {}), onSubmitted: (_) => _register()),
-              Btn('등록하기', primary: true, block: true, onPressed: _action.text.trim().isEmpty ? null : _register),
-              for (final s in _saved) Between(left: T.small(s), right: const Pill('등록됨', tone: 'good')),
-            ]),
-          ),
-        ]),
-      ]),
     ]);
-  }
-}
-
-class _Indicator extends StatelessWidget {
-  const _Indicator(this.m);
-  final Json m;
-  @override
-  Widget build(BuildContext context) {
-    final delta = (m['delta'] as num?) ?? 0;
-    final good = m['good'] == true;
-    final color = delta == 0 ? C.ink : (delta > 0) == good ? C.good : C.bad;
-    return AppCard(
-      child: VStack(gap: 4, children: [
-        T.label(m['name']),
-        Text.rich(TextSpan(children: [
-          TextSpan(text: '${m['value']}', style: tx(size: 24, weight: FontWeight.w700, height: 1.3)),
-          TextSpan(text: ' ${m['unit']}', style: tx(size: 13, color: C.muted)),
-        ])),
-        Text(delta == 0 ? '변화 없음' : '${delta > 0 ? '▲' : '▼'} ${delta.abs()} 지난달 대비', style: tx(size: 14, color: color)),
-      ]),
-    );
   }
 }

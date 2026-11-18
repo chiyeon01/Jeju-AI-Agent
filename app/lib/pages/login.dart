@@ -3,7 +3,6 @@ import 'package:material_ui/material_ui.dart';
 
 import '../api/client.dart' as api;
 import '../main.dart';
-import '../data/tourist_mock.dart' show places;
 import '../theme.dart';
 import '../widgets/back.dart';
 import '../widgets/ui.dart';
@@ -128,7 +127,6 @@ class _SignupPageState extends State<SignupPage> {
   String _error = '';
   bool _busy = false;
   api.AppUser? _done;
-  String? _placeId; // 관광객 평가를 받을 내 가게 (선택)
 
   @override
   void dispose() {
@@ -158,7 +156,6 @@ class _SignupPageState extends State<SignupPage> {
         'role': _role,
         if (merchant) 'storeName': _store.text.trim(),
         if (merchant) 'businessNo': _biz.text.replaceAll(RegExp(r'\D'), ''),
-        if (merchant && _placeId != null) 'placeId': _placeId,
       });
       // 관광객은 바로 쓸 수 있으니 가입한 정보로 로그인까지 이어서 합니다
       if (u.status == 'ACTIVE') {
@@ -195,16 +192,6 @@ class _SignupPageState extends State<SignupPage> {
       if (merchant) ...[
         Field('상호', child: AppInput(controller: _store)),
         Field('사업자등록번호', child: AppInput(controller: _biz, hint: '000-00-00000', keyboard: TextInputType.number)),
-        Field('관광객 평가를 받을 내 가게 (선택)',
-            child: DropdownButton<String?>(
-              isExpanded: true,
-              value: _placeId,
-              items: [
-                const DropdownMenuItem(value: null, child: T.small('나중에 연결할게요')),
-                for (final p in places.where((p) => api.storeKinds.containsKey(p.kind))) DropdownMenuItem(value: p.id, child: T.small(p.name)),
-              ],
-              onChanged: (v) => setState(() => _placeId = v),
-            )),
         const Note('상권 주인 계정은 관리자 승인 후 사용할 수 있어요.'),
       ],
       if (_error.isNotEmpty) T.small(_error, color: C.bad),
