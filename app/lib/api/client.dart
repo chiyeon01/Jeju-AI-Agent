@@ -566,43 +566,29 @@ Future<void> registerAction(String kind, String title) async {
 // ── 내 가게 별점·리뷰 (관광객 평가 실데이터) ─────
 const storeKinds = {'food': '식당', 'cafe': '카페', 'indoor': '실내 체험'};
 
-/// 가게 연결용 장소 [{id, name, region, kind}]
-Future<List<Json>> getMerchantPlaces() async {
-  if (!isMock) return [for (final p in await _get('/owner/places') as List) p as Json];
-  return [
-    for (final p in places.where((p) => storeKinds.containsKey(p.kind))) {'no': places.indexOf(p) + 1, 'id': p.id, 'name': p.name, 'region': p.region, 'kind': p.kind}
-  ];
+/// GET /owner/places?q= → [{id, no, name, region, kind, reviews, avgStars, lastReviewAt}]
+/// 관광객이 앱에서 실제로 평점을 남긴 가게만 백엔드 DB 에서 검색합니다 (임시 데이터 없음, 최근 평가 순)
+Future<List<Json>> getMerchantPlaces([String q = '']) async {
+  if (isMock) return const [];
+  final query = q.trim().isEmpty ? '' : '?q=${Uri.encodeQueryComponent(q.trim())}';
+  return [for (final p in await _get('/owner/places$query') as List) p as Json];
 }
 
-String? _mockLinked;
-
-/// PUT /owner/place {placeId}
+/// PUT /owner/place {placeId} — 평점을 받은 가게만 연결됩니다 (아니면 PLACE_NOT_RATED)
 Future<void> linkMyPlace(String placeId) async {
-  if (!isMock) {
-    await _request('PUT', '/owner/place', {'placeId': placeId});
-    return;
-  }
-  _mockLinked = placeId;
+  if (isMock) throw ApiError(400, 'MOCK', '가게 연결은 백엔드에 연결해야 쓸 수 있어요 (useMock=false).');
+  await _request('PUT', '/owner/place', {'placeId': placeId});
 }
 
 /// GET /owner/my-reviews → {place, summary:{count, avg, dist, byType[]}, reviews[], regionScore, analysis}. 연결 전이면 null
 Future<Json?> getMyReviews() async {
-  if (!isMock) {
-    try {
-      return await _get('/owner/my-reviews') as Json;
-    } on ApiError catch (e) {
-      if (e.code == 'PLACE_NOT_LINKED') return null;
-      rethrow;
-    }
+  if (isMock) return null;
+  try {
+    return await _get('/owner/my-reviews') as Json;
+  } on ApiError catch (e) {
+    if (e.code == 'PLACE_NOT_LINKED') return null;
+    rethrow;
   }
-  await _wait(300);
-  if (_mockLinked == null) return null;
-  final p = places.firstWhere((x) => x.id == _mockLinked);
-  return {
-    'place': {'no': places.indexOf(p) + 1, 'id': p.id, 'name': p.name, 'region': p.region, 'kind': p.kind},
-    'summary': {'count': 0, 'avg': 0, 'dist': {'1': 0, '2': 0, '3': 0, '4': 0, '5': 0}, 'byType': []},
-    'reviews': [], 'regionScore': null, 'analysis': null,
-  };
 }
 
 /// POST /owner/my-reviews/analysis → 저장된 분석 {id, title, body, source, createdAt}

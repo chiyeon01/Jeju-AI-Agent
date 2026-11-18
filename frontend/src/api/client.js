@@ -383,33 +383,24 @@ export async function registerAction(action) {
 }
 
 // ── 내 가게 별점·리뷰 (관광객 평가 실데이터) ─────
-/** GET /owner/places → [{ id, name, region, kind }] 가게 연결용 장소 */
-export async function getMerchantPlaces() {
-  if (!isMock) return get('/owner/places');
-  return PLACES.filter((p) => ['food', 'cafe', 'indoor'].includes(p.kind)).map(({ id, name, region, kind }) => ({ id, name, region, kind }));
+// 가게 검색·연결·내 리뷰는 임시(목업) 데이터를 쓰지 않습니다. 관광객이 실제로 남긴 평점만 백엔드 DB 에서 가져옵니다.
+/** GET /owner/places?q= → [{ id, no, name, region, kind, reviews, avgStars, lastReviewAt }]
+ *  관광객이 앱에서 평점을 남긴 가게만, 최근 평가 순 */
+export async function getMerchantPlaces(q = '') {
+  if (isMock) return [];
+  return get(`/owner/places${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`);
 }
 
-/** PUT /owner/place { placeId } */
+/** PUT /owner/place { placeId } — 평점을 받은 가게만 연결됩니다 (아니면 PLACE_NOT_RATED) */
 export async function linkMyPlace(placeId) {
-  if (!isMock) return request('PUT', '/owner/place', { placeId });
-  mockLinked = placeId;
-  return { placeId };
+  if (isMock) throw new ApiError(400, 'MOCK', '가게 연결은 백엔드에 연결해야 쓸 수 있어요 (VITE_USE_MOCK=false).');
+  return request('PUT', '/owner/place', { placeId });
 }
 
-let mockLinked = null;
 /** GET /owner/my-reviews → { place, summary:{count, avg, dist, byType[]}, reviews[], regionScore, analysis } (연결 전이면 null) */
 export async function getMyReviews() {
-  if (!isMock) {
-    try { return await get('/owner/my-reviews'); } catch (e) { if (e.code === 'PLACE_NOT_LINKED') return null; throw e; }
-  }
-  await wait(300);
-  if (!mockLinked) return null;
-  const p = PLACES.find((x) => x.id === mockLinked);
-  return {
-    place: { id: p.id, name: p.name, region: p.region, kind: p.kind },
-    summary: { count: 0, avg: 0, dist: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, byType: [] },
-    reviews: [], regionScore: null, analysis: null,
-  };
+  if (isMock) return null;
+  try { return await get('/owner/my-reviews'); } catch (e) { if (e.code === 'PLACE_NOT_LINKED') return null; throw e; }
 }
 
 /** POST /owner/my-reviews/analysis → 저장된 분석 { id, title, body, source, createdAt } */

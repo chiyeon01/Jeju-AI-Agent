@@ -390,6 +390,32 @@ def review_stats_by_region(since: datetime | None = None) -> dict[str, dict]:
         return {r["region"]: {"count": r["n"], "avg": round(r["avg"] or 0.0, 2)} for r in conn.execute(q + " GROUP BY region", args)}
 
 
+def rated_places(q: str = "", kinds: tuple[str, ...] = (), limit: int = 50) -> list[dict]:
+    """관광객이 실제로 평점을 남긴 장소만 (places 고유 번호·이름 기준). 최근 평가 순.
+    q 는 이름 부분 검색, kinds 를 주면 그 종류만."""
+    sql = ("SELECT p.key AS id, p.no AS no, p.name AS name, p.region AS region, p.kind AS kind,"
+           " COUNT(r.id) AS n, AVG(r.stars) AS avg, MAX(r.created_at) AS last_at"
+           " FROM reviews r JOIN places p ON p.key = r.place_id WHERE 1 = 1")
+    args: list = []
+    if q:
+        sql += " AND REPLACE(p.name, ' ', '') LIKE ?"
+        args.append(f"%{q.replace(' ', '')}%")
+    if kinds:
+        sql += f" AND p.kind IN ({', '.join('?' * len(kinds))})"
+        args.extend(kinds)
+    sql += " GROUP BY p.key ORDER BY last_at DESC LIMIT ?"
+    args.append(limit)
+    with get_conn() as conn:
+        return [{"id": r["id"], "no": r["no"], "name": r["name"], "region": r["region"], "kind": r["kind"],
+                 "reviews": r["n"], "avgStars": round(r["avg"] or 0.0, 2), "lastReviewAt": r["last_at"]}
+                for r in conn.execute(sql, args)]
+
+
+def is_rated_place(place_id: str) -> bool:
+    with get_conn() as conn:
+        return conn.execute("SELECT 1 FROM reviews WHERE place_id = ? LIMIT 1", (place_id,)).fetchone() is not None
+
+
 def review_stats_by_place() -> dict[str, dict]:
     with get_conn() as conn:
         return {r["place_id"]: {"count": r["n"], "avg": round(r["avg"] or 0.0, 2)} for r in conn.execute(

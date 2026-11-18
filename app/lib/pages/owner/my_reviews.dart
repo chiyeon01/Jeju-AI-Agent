@@ -27,6 +27,9 @@ class _MyReviewsState extends State<MyReviews> {
   Timer? _toastTimer;
   void Function()? _off;
   String? _subPlace;
+  final _q = TextEditingController();
+  Timer? _searchDebounce, _refresh;
+  bool _searching = false;
 
   @override
   void initState() {
@@ -38,6 +41,9 @@ class _MyReviewsState extends State<MyReviews> {
   void dispose() {
     _off?.call();
     _toastTimer?.cancel();
+    _searchDebounce?.cancel();
+    _refresh?.cancel();
+    _q.dispose();
     super.dispose();
   }
 
@@ -80,14 +86,34 @@ class _MyReviewsState extends State<MyReviews> {
     }
   }
 
+  // 가게 검색: 관광객이 실제로 평점을 남긴 가게만 백엔드에서 검색. 검색 화면이 열려 있는 동안 10초마다 새로고침
   Future<void> _loadPlaces() async {
-    if (_places.isNotEmpty) return;
+    _refresh ??= Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted || (_d != null && !_relink)) {
+        _refresh?.cancel();
+        _refresh = null;
+        return;
+      }
+      _search(quiet: true);
+    });
+    await _search();
+  }
+
+  Future<void> _search({bool quiet = false}) async {
+    if (!quiet && mounted) setState(() => _searching = true);
     try {
-      final p = await getMerchantPlaces();
-      if (mounted) setState(() => _places = p);
+      final p = await getMerchantPlaces(_q.text);
+      if (mounted) setState(() { _places = p; _err = ''; });
     } catch (e) {
       if (mounted) setState(() => _err = '$e');
+    } finally {
+      if (mounted) setState(() => _searching = false);
     }
+  }
+
+  void _onQuery(String _) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), _search);
   }
 
   Future<void> _link() async {
@@ -121,18 +147,29 @@ class _MyReviewsState extends State<MyReviews> {
       return AppCard(
         child: VStack(gap: 10, children: [
           const T.h3('내 가게 별점·리뷰'),
-          const T.muted('관광객이 코스를 다녀와 남긴 별점·리뷰를 보려면 내 가게를 연결해 주세요.', size: 13),
-          DropdownButton<String>(
-            key: const ValueKey('place-select'),
-            isExpanded: true,
-            value: _pick,
-            hint: const T.small('관광객 평가를 받는 내 가게를 고르세요'),
-            items: [
-              for (final p in _places)
-                DropdownMenuItem(value: p['id'] as String, child: T.small('${p['no'] != null ? '#${p['no']} ' : ''}${p['name']} · ${storeKinds[p['kind']] ?? p['kind']}')),
-            ],
-            onChanged: (v) => setState(() => _pick = v),
-          ),
+          const T.muted('관광객이 코스를 다녀와 남긴 별점·리뷰를 보려면 내 가게를 검색해 연결해 주세요. 관광객 평점을 받은 가게만 검색돼요.', size: 13),
+          AppInput(key: const ValueKey('place-search'), controller: _q, hint: '가게 이름으로 검색', onChanged: _onQuery),
+          if (_searching && _places.isEmpty) const T.muted('검색 중…', size: 13),
+          if (!_searching && _places.isEmpty)
+            T.muted(_q.text.trim().isEmpty
+                ? '아직 관광객 평점을 받은 가게가 없어요. 관광객이 앱에서 평점을 남기면 여기에 나타나요.'
+                : "'${_q.text.trim()}'에 해당하는, 관광객 평점을 받은 가게가 없어요.", size: 13),
+          for (final p in _places)
+            Material(
+              color: _pick == p['id'] ? C.skyDeep.withValues(alpha: 0.12) : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => setState(() => _pick = p['id'] as String),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Between(
+                    left: T.small('${p['no'] != null ? '#${p['no']} ' : ''}${p['name']} · ${storeKinds[p['kind']] ?? p['kind']}'),
+                    right: T.muted('★ ${((p['avgStars'] as num?) ?? 0).toStringAsFixed(1)} · ${p['reviews'] ?? 0}건', size: 13),
+                  ),
+                ),
+              ),
+            ),
           Btn('연결', primary: true, onPressed: _pick == null ? null : _link),
           if (_err.isNotEmpty) Note(_err),
         ]),

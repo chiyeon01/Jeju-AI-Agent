@@ -6,24 +6,49 @@ import { getMyReviews, getMerchantPlaces, linkMyPlace, analyzeMyReviews, subscri
 
 const KIND = { food: '식당', cafe: '카페', indoor: '실내 체험' };
 
+const REFRESH_MS = 10000; // 검색 목록을 다시 불러오는 간격 (새로 평가된 가게가 바로 보이게)
+
+// 내 가게 검색: 관광객이 앱에서 실제로 평점을 남긴 가게만 백엔드 DB 에서 검색합니다
 function LinkPlace({ onLinked, current }) {
-  const [places, setPlaces] = useState([]);
+  const [q, setQ] = useState('');
+  const [places, setPlaces] = useState(null); // null=불러오는 중
   const [pick, setPick] = useState(current ?? '');
   const [err, setErr] = useState('');
-  useEffect(() => { getMerchantPlaces().then(setPlaces).catch((e) => setErr(e.message)); }, []);
+  useEffect(() => {
+    let alive = true;
+    const load = () => getMerchantPlaces(q).then((p) => { if (alive) { setPlaces(p); setErr(''); } }).catch((e) => alive && setErr(e.message));
+    const t = setTimeout(load, 250);
+    const iv = setInterval(load, REFRESH_MS);
+    return () => { alive = false; clearTimeout(t); clearInterval(iv); };
+  }, [q]);
   const save = async (e) => {
     e.preventDefault();
     if (!pick) return;
     try { await linkMyPlace(pick); onLinked(); } catch (x) { setErr(x.message); }
   };
   return (
-    <form className="row" style={{ gap: 8, flexWrap: 'wrap' }} onSubmit={save}>
-      <select className="input" style={{ flex: '1 1 220px' }} value={pick} onChange={(e) => setPick(e.target.value)} aria-label="내 가게">
-        <option value="">관광객 평가를 받는 내 가게를 고르세요</option>
-        {places.map((p) => <option key={p.id} value={p.id}>{p.no ? `#${p.no} ` : ''}{p.name} · {KIND[p.kind] ?? p.kind}</option>)}
-      </select>
-      <button className="btn primary" type="submit" disabled={!pick}>연결</button>
-      {err && <span className="small bad">{err}</span>}
+    <form className="stack" style={{ gap: 8 }} onSubmit={save}>
+      <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)}
+             placeholder="가게 이름으로 검색" aria-label="내 가게 검색" />
+      <div className="stack" role="listbox" aria-label="평점을 받은 가게" style={{ gap: 4, maxHeight: 280, overflowY: 'auto' }}>
+        {places === null && <span className="small muted">검색 중…</span>}
+        {places?.length === 0 && (
+          <span className="small muted">{q.trim() ? `'${q.trim()}'에 해당하는, 관광객 평점을 받은 가게가 없어요.` : '아직 관광객 평점을 받은 가게가 없어요. 관광객이 앱에서 평점을 남기면 여기에 나타나요.'}</span>
+        )}
+        {places?.map((p) => (
+          <button key={p.id} type="button" role="option" aria-selected={pick === p.id}
+                  className={`btn sm ${pick === p.id ? 'primary' : 'ghost'}`}
+                  style={{ justifyContent: 'space-between', display: 'flex', textAlign: 'left' }}
+                  onClick={() => setPick(p.id)}>
+            <span>{p.no ? `#${p.no} ` : ''}{p.name} · {KIND[p.kind] ?? p.kind}</span>
+            <span className="num">★ {Number(p.avgStars).toFixed(1)} · {p.reviews}건</span>
+          </button>
+        ))}
+      </div>
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn primary" type="submit" disabled={!pick}>연결</button>
+        {err && <span className="small bad">{err}</span>}
+      </div>
     </form>
   );
 }
@@ -68,7 +93,7 @@ export default function MyReviews() {
     return (
       <section className="card stack">
         <h3>내 가게 별점·리뷰</h3>
-        <p className="small muted" style={{ margin: 0 }}>관광객이 코스를 다녀와 남긴 별점·리뷰를 보려면 내 가게를 연결해 주세요.</p>
+        <p className="small muted" style={{ margin: 0 }}>관광객이 코스를 다녀와 남긴 별점·리뷰를 보려면 내 가게를 검색해 연결해 주세요. 관광객 평점을 받은 가게만 검색돼요.</p>
         <LinkPlace current={d?.place?.id} onLinked={() => { setRelink(false); setD(undefined); load(); }} />
         {err && <p className="note">{err}</p>}
       </section>

@@ -5,7 +5,7 @@
 #  GET  /admin/insights/regions              지역 점수 0~10 (요청마다 새로 계산)
 #  GET  /admin/insights/places              장소(고유 번호)별 평가·사장님 연결·최근 분석
 #  GET  /admin/reports  · POST /admin/reports  Agent 지역 보고서 목록 · 새로 만들기
-#  GET  /owner/places                        가게 연결용 장소 목록
+#  GET  /owner/places?q=                     가게 연결용 장소 검색 (관광객이 평점을 남긴 곳만)
 #  GET  /owner/place  · PUT /owner/place      내 가게와 연결된 장소
 #  GET  /owner/my-reviews                    내 가게 별점·리뷰·최근 분석
 #  POST /owner/my-reviews/analysis           Agent 리뷰 분석 (저장)
@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from app import db
+from app.errors import ApiError
 from app.security import current_user, require_roles
 from app.services import insight_service as svc
 from app.services.photo_service import place_photo
@@ -65,8 +66,10 @@ class PlaceLink(BaseModel):
 
 
 @router.get("/owner/places")
-def places(_: dict = Depends(merchant)) -> list[dict]:
-    return svc.merchant_places()
+def places(q: str = Query("", max_length=40), limit: int = Query(50, ge=1, le=200),
+           _: dict = Depends(merchant)) -> list[dict]:
+    """관광객이 실제로 평점을 남긴 가게만 [{ id, no, name, region, kind, reviews, avgStars, lastReviewAt }] (최근 평가 순)"""
+    return svc.merchant_places(q, limit)
 
 
 @router.get("/owner/place")
@@ -79,7 +82,9 @@ def my_place(user: dict = Depends(merchant)) -> dict:
 
 @router.put("/owner/place")
 def link_place(req: PlaceLink, user: dict = Depends(merchant)) -> dict:
-    svc.place_or_404(req.placeId)
+    p = svc.place_or_404(req.placeId)
+    if p["kind"] not in svc.STORE_KINDS or not db.is_rated_place(p["id"]):
+        raise ApiError(400, "PLACE_NOT_RATED", "아직 관광객 평점이 없는 장소예요. 평점을 받은 가게만 연결할 수 있어요.")
     db.set_store_place(user["id"], req.placeId)
     return my_place(user)
 
